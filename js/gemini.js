@@ -1,4 +1,4 @@
-import { MAJOR_CATEGORIES } from './constants.js';
+import { MAJOR_CATEGORIES, MAJOR_CATEGORY_NAME_TO_ID, CATEGORY_IDS, MINOR_CATEGORY_DICTIONARY, MINOR_CATEGORY_DISPLAY_NAMES } from './constants.js';
 
 /**
  * GeminiService: Gemini APIを使用してレシートテキストを構造化するサービス
@@ -91,7 +91,48 @@ ${text}
             const jsonText = data.candidates[0].content.parts[0].text;
 
             // JSONパース
-            return JSON.parse(jsonText);
+            const parsedData = JSON.parse(jsonText);
+
+            // カテゴリをIDに変換してマッピング
+            if (parsedData.items && Array.isArray(parsedData.items)) {
+                parsedData.items.forEach(item => {
+                    // 大カテゴリの変換 (日本語 -> ID)
+                    const majorName = item.major_category;
+                    if (MAJOR_CATEGORY_NAME_TO_ID[majorName]) {
+                        item.major_category = MAJOR_CATEGORY_NAME_TO_ID[majorName];
+                    } else {
+                        item.major_category = CATEGORY_IDS.OTHER; // マッチしない場合はその他
+                    }
+
+                    // 小カテゴリの変換 (日本語 -> ID)
+                    const minorName = item.minor_category;
+                    // 部分一致も含めて辞書検索するか、完全一致のみか。
+                    // Geminiは指示通りに出す傾向があるため、まずは完全一致 or 辞書のキーに含まれるかで判断
+                    // ここでは辞書のキーと完全一致、もしくは辞書のキーがGemini出力に含まれるかを簡易チェック
+
+                    let minorId = 'other_minor'; // デフォルト
+
+                    if (MINOR_CATEGORY_DICTIONARY[minorName]) {
+                        minorId = MINOR_CATEGORY_DICTIONARY[minorName];
+                    } else {
+                        // 辞書にない場合、辞書のキーを含んでいるか検索 (例: "新鮮野菜" -> "野菜"マッチ)
+                        for (const [key, id] of Object.entries(MINOR_CATEGORY_DICTIONARY)) {
+                            if (minorName.includes(key)) {
+                                minorId = id;
+                                break;
+                            }
+                        }
+                    }
+
+                    // IDをセット
+                    item.minor_category = minorId;
+
+                    // 表示用テキストはUI側で解決するため、ここではIDのみ保持 (あるいはUIの都合で変換しておくか？)
+                    // 要件: "データの管理はID化" -> ここではIDにする
+                });
+            }
+
+            return parsedData;
         } catch (error) {
             console.error('Gemini API request failed:', error);
             throw error;

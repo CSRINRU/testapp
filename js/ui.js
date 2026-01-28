@@ -4,7 +4,7 @@ import { saveToIndexedDB, saveReceipt, deleteReceipt } from './db.js';
 import { setupCamera, capturePhoto, handleImageUpload, updateModalImage } from './camera.js';
 import { updateAnalysis } from './analysis.js';
 import { geminiService } from './gemini.js';
-import { MAJOR_CATEGORIES } from './constants.js';
+import { MAJOR_CATEGORIES, MINOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS, MAJOR_CATEGORY_DISPLAY_NAMES } from './constants.js';
 
 /**
  * タブ切り替えの設定
@@ -259,14 +259,17 @@ export function updateReceiptList() {
         }
     }
 
-    // カテゴリフィルター (レシート内のアイテムのいずれかが一致するか、またはレシート自体にカテゴリがある場合)
+    // カテゴリフィルター
     if (categoryFilter !== 'all') {
         filteredReceipts = filteredReceipts.filter(receipt => {
             // 新しい2階層構造: items内のmajor_categoryに一致するものがあるか
             if (receipt.items && Array.isArray(receipt.items)) {
-                return receipt.items.some(item => (item.major_category || item.category) === categoryFilter);
+                // categoryFilterが 'food' などのIDで渡ってくると仮定
+                // もし日本語で渡ってくるなら変換が必要
+                // UIのセレクトボックスもIDにするべき
+                return receipt.items.some(item => (item.major_category) === categoryFilter);
             }
-            // フォールバック: 旧データ構造対応 (receipt.categoryがある場合)
+            // 古いデータ構造 (receipt.category) はフォールバックなしなら無視、あるいはID比較
             return receipt.category === categoryFilter;
         });
     }
@@ -385,7 +388,7 @@ export function showReceiptModal(receiptData) {
             });
         } else {
             // アイテムがない場合は空行を1つ追加
-            itemsContainer.appendChild(createItemRow({ name: '', count: 1, amount: 0, major_category: 'その他', minor_category: '' }));
+            itemsContainer.appendChild(createItemRow({ name: '', count: 1, amount: 0, major_category: 'other', minor_category: '' }));
         }
     }
 
@@ -413,13 +416,28 @@ function createItemRow(item = {}) {
     row.className = 'item-row';
 
     // カテゴリの定義 (Major Categories)
-    const currentMajor = item.major_category || item.category || 'その他'; // item.category is fallback
-    const currentMinor = item.minor_category || '';
+    // IDで保持されているが、古いデータなどでテキストの場合はIDに変換を試みる（フォールバックなしでも安全策として）
+    let currentMajor = item.major_category || item.category || CATEGORY_IDS.OTHER;
+    // もし日本語のままならIDに変換 (constantsに逆変換マップがあればいいが、ここでは簡易的に)
+    // 今回は新規データ前提なのでIDと仮定
+
+    let currentMinor = item.minor_category || 'other_minor';
 
     // Major Category Select
     const majorSelectHtml = `
         <select class="item-major-category">
-            ${MAJOR_CATEGORIES.map(cat => `<option value="${cat}" ${cat === currentMajor ? 'selected' : ''}>${cat}</option>`).join('')}
+            ${Object.entries(MAJOR_CATEGORY_DISPLAY_NAMES).map(([id, name]) =>
+        `<option value="${id}" ${id === currentMajor ? 'selected' : ''}>${name}</option>`
+    ).join('')}
+        </select>
+    `;
+
+    // Minor Category Select
+    const minorSelectHtml = `
+        <select class="item-minor-category" style="flex: 1;">
+            ${Object.entries(MINOR_CATEGORY_DISPLAY_NAMES).map(([id, name]) =>
+        `<option value="${id}" ${id === currentMinor ? 'selected' : ''}>${name}</option>`
+    ).join('')}
         </select>
     `;
 
@@ -427,7 +445,7 @@ function createItemRow(item = {}) {
         <input type="text" class="item-name" value="${item.name || ''}" placeholder="商品名" style="flex: 2;">
         <input type="number" class="item-amount" value="${item.amount || 0}" placeholder="価格" style="flex: 1;">
         ${majorSelectHtml}
-        <input type="text" class="item-minor-category" value="${currentMinor}" placeholder="小カテゴリ" style="flex: 1;">
+        ${minorSelectHtml}
         <button type="button" class="btn btn-danger btn-small delete-item-btn">
             <i class="fas fa-times"></i>
         </button>

@@ -1,4 +1,5 @@
 import { AppState } from './state.js';
+import { MAJOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS } from './constants.js';
 
 /**
  * 分析データの更新
@@ -78,7 +79,7 @@ export function updateAnalysis() {
     for (const [category, count] of Object.entries(categoryCount)) {
         if (count > maxCount) {
             maxCount = count;
-            topCategory = category;
+            topCategory = MAJOR_CATEGORY_DISPLAY_NAMES[category] || category; // IDから名前に変換
         }
     }
 
@@ -212,8 +213,12 @@ export function drawCategoryChart(receipts) {
         ctx.fillStyle = '#333';
         ctx.font = '12px Arial';
         ctx.textAlign = 'left';
+
+        // カテゴリ名を表示用に変換
+        const displayName = MAJOR_CATEGORY_DISPLAY_NAMES[categories[i]] || categories[i];
+
         ctx.fillText(
-            `${categories[i]}: ¥${amounts[i].toLocaleString()} (${Math.round(amounts[i] / total * 100)}%)`,
+            `${displayName}: ¥${amounts[i].toLocaleString()} (${Math.round(amounts[i] / total * 100)}%)`,
             legendX + legendWidth + 10,
             legendY + legendHeight - 3
         );

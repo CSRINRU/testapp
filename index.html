@@ -146,11 +146,12 @@
                     </select>
                     <select id="filterCategory" class="filter-select">
                         <option value="all">すべてのカテゴリ</option>
-                        <option value="食品">食品</option>
-                        <option value="雑貨">雑貨</option>
-                        <option value="日用品">日用品</option>
-                        <option value="外食">外食</option>
-                        <option value="その他">その他</option>
+                        <option value="food">食料品</option>
+                        <option value="daily_goods">日用品</option>
+                        <option value="misc">雑貨</option>
+                        <option value="clothing">衣服</option>
+                        <option value="luxury">嗜好品</option>
+                        <option value="other">その他</option>
                     </select>
                     <select id="sortOrder" class="filter-select">
                         <option value="dateDesc">日付の新しい順</option>
@@ -242,8 +243,7 @@
             </div>
 
             <div class="settings-section">
-                <h3><i class="fas fa-tags"></i> カテゴリ辞書設定</h3>
-                <p class="description">商品名に含まれるキーワードに基づいて自動的にカテゴリを分類します</p>
+
 
                 <div class="api-key-section"
                     style="margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
@@ -261,34 +261,7 @@
                     </div>
                 </div>
 
-                <div class="dictionary-container">
-                    <div class="dictionary-list" id="categoryDictionary">
-                        <!-- カテゴリ辞書が動的に挿入されます -->
-                    </div>
 
-                    <div class="add-keyword-form">
-                        <h4>キーワードを追加</h4>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="newKeyword">キーワード:</label>
-                                <input type="text" id="newKeyword" placeholder="例: キャベツ">
-                            </div>
-                            <div class="form-group">
-                                <label for="newCategory">カテゴリ:</label>
-                                <select id="newCategory">
-                                    <option value="食品">食品</option>
-                                    <option value="雑貨">雑貨</option>
-                                    <option value="日用品">日用品</option>
-                                    <option value="外食">外食</option>
-                                    <option value="その他">その他</option>
-                                </select>
-                            </div>
-                            <button id="addKeywordBtn" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> 追加
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div class="settings-section">

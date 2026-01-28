@@ -3,6 +3,7 @@ import { AppState } from './state.js';
 import { OnnxOCR } from './onnx_ocr.js';
 import { setupPreprocessingUI } from './preprocessing_ui.js';
 import { geminiService } from './gemini.js';
+import { CATEGORY_IDS, MINOR_CATEGORY_DICTIONARY } from './constants.js';
 
 // OCRインスタンス
 export const ocrEngine = new OnnxOCR();
@@ -114,7 +115,7 @@ export async function processImage(imageData, showReceiptModal) {
                         }
 
                         // カテゴリのデフォルト設定
-                        if (!item.major_category) item.major_category = 'その他';
+                        if (!item.major_category) item.major_category = CATEGORY_IDS.OTHER;
                         if (!item.minor_category) item.minor_category = 'ー';
                     }
                 }
