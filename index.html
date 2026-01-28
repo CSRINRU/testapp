@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スマートレシート管理</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Local AI Libraries -->
+    <script src="lib/ort.all.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1><i class="fas fa-receipt"></i> スマートレシート管理</h1>
+            <p class="subtitle">レシートを撮影して自動で家計簿に</p>
+        </header>
+
+        <!-- メインナビゲーション -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="camera">
+                <i class="fas fa-camera"></i> 撮影
+            </button>
+            <button class="nav-tab" data-tab="list">
+                <i class="fas fa-list"></i> レシート一覧
+            </button>
+            <button class="nav-tab" data-tab="analysis">
+                <i class="fas fa-chart-pie"></i> 分析
+            </button>
+            <button class="nav-tab" data-tab="settings">
+                <i class="fas fa-cog"></i> 設定
+            </button>
+        </nav>
+
+        <!-- タブコンテンツ -->
+        <div class="tab-content active" id="camera-tab">
+            <div class="section-header">
+                <h2><i class="fas fa-camera"></i> レシート撮影</h2>
+                <p>レシートを撮影して内容を自動解析します</p>
+            </div>
+
+            <div class="camera-container">
+                <div class="camera-view">
+                    <video id="cameraPreview" autoplay playsinline></video>
+                    <canvas id="photoCanvas" class="hidden"></canvas>
+                    <img id="selectedImagePreview" class="hidden">
+                    <div id="cameraOverlay" class="camera-overlay">
+                        <div class="overlay-text">レシートを枠内に収めてください</div>
+                    </div>
+                </div>
+
+                <div class="camera-controls">
+                    <button id="captureBtn" class="btn btn-primary btn-large">
+                        <i class="fas fa-camera"></i> 撮影する
+                    </button>
+                    <button id="switchCameraBtn" class="btn btn-secondary">
+                        <i class="fas fa-sync-alt"></i> カメラ切替
+                    </button>
+                    <label for="fileInput" id="uploadBtn" class="btn btn-secondary">
+                        <i class="fas fa-upload"></i> 画像を選択
+                    </label>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+                </div>
+
+                <div class="processing-section hidden" id="processingSection">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>レシートを解析中...</p>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">初期化中...</p>
+                </div>
+            </div>
+
+            <!-- Preprocessing Section (Initially Hidden) -->
+            <div id="preprocessing-section" class="preprocessing-section hidden">
+                <div class="section-header">
+                    <h3><i class="fas fa-sliders-h"></i> 画像補正 & パラメータ調整</h3>
+                </div>
+
+                <div class="preprocessing-content">
+                    <div class="preprocessing-preview-single">
+                        <label>AI入力画像（前処理後）</label>
+                        <canvas id="prepProcessedCanvas"></canvas>
+                    </div>
+
+                    <div class="preprocessing-controls-grid">
+                        <div class="control-group">
+                            <div class="control-header">
+                                <label>Contrast (コントラスト): <span id="disp-contrast">1.3</span></label>
+                                <input type="checkbox" id="check-contrast" checked title="On/Off">
+                            </div>
+                            <input type="range" id="slider-contrast" min="0.5" max="3.0" step="0.1" value="1.3">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-header">
+                                <label>Sharpening (シャープニング)</label>
+                                <input type="checkbox" id="check-sharpening" checked title="On/Off">
+                            </div>
+                            <div class="control-desc">鮮鋭化フィルタ (固定)</div>
+                        </div>
+
+                        <div class="control-group">
+                            <label>Limit Side Len (最大辺長): <span id="disp-limitSide">2000</span>px</label>
+                            <input type="range" id="slider-limitSide" min="640" max="3200" step="32" value="2000">
+                        </div>
+                        <div class="control-group">
+                            <label>Det Threshold (検出閾値): <span id="disp-detThresh">0.4</span></label>
+                            <input type="range" id="slider-detThresh" min="0.1" max="0.9" step="0.05" value="0.4">
+                        </div>
+                        <div class="control-group">
+                            <label>Box Threshold (Box閾値): <span id="disp-boxThresh">0.6</span></label>
+                            <input type="range" id="slider-boxThresh" min="0.1" max="0.9" step="0.05" value="0.6">
+                        </div>
+                        <div class="control-group">
+                            <label>Rec Threshold (認識閾値): <span id="disp-recThresh">0.6</span></label>
+                            <input type="range" id="slider-recThresh" min="0.1" max="1.0" step="0.05" value="0.6">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preprocessing-actions">
+                    <button id="prepCancelBtn" class="btn btn-secondary">キャンセル</button>
+                    <button id="prepAnalyzeBtn" class="btn btn-primary btn-large">
+                        <i class="fas fa-search"></i> 解析開始
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="list-tab">
+            <div class="section-header">
+                <h2><i class="fas fa-list"></i> レシート一覧</h2>
+                <div class="filter-controls">
+                    <select id="filterPeriod" class="filter-select">
+                        <option value="all">すべての期間</option>
+                        <option value="week">直近1週間</option>
+                        <option value="month">直近1ヶ月</option>
+                        <option value="3months">直近3ヶ月</option>
+                        <option value="custom">カスタム期間</option>
+                    </select>
+                    <select id="filterCategory" class="filter-select">
+                        <option value="all">すべてのカテゴリ</option>
+                        <option value="食品">食品</option>
+                        <option value="雑貨">雑貨</option>
+                        <option value="日用品">日用品</option>
+                        <option value="外食">外食</option>
+                        <option value="その他">その他</option>
+                    </select>
+                    <select id="sortOrder" class="filter-select">
+                        <option value="dateDesc">日付の新しい順</option>
+                        <option value="dateAsc">日付の古い順</option>
+                        <option value="amountDesc">金額の高い順</option>
+                        <option value="amountAsc">金額の低い順</option>
+                    </select>
+                    <button id="applyFilterBtn" class="btn btn-secondary">適用</button>
+                </div>
+            </div>
+
+            <div class="custom-period hidden" id="customPeriodSection">
+                <div class="date-inputs">
+                    <div class="date-input">
+                        <label for="startDate">開始日:</label>
+                        <input type="date" id="startDate">
+                    </div>
+                    <div class="date-input">
+                        <label for="endDate">終了日:</label>
+                        <input type="date" id="endDate">
+                    </div>
+                </div>
+            </div>
+
+            <div class="receipt-list" id="receiptList">
+                <!-- レシートアイテムが動的に挿入されます -->
+                <div class="empty-state">
+                    <i class="fas fa-receipt fa-3x"></i>
+                    <p>レシートがありません</p>
+                    <p>撮影タブでレシートを追加してください</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="analysis-tab">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-pie"></i> 支出分析</h2>
+                <div class="analysis-controls">
+                    <div class="analysis-period">
+                        <select id="analysisPeriod" class="filter-select">
+                            <option value="month">今月</option>
+                            <option value="lastMonth">先月</option>
+                            <option value="3months">直近3ヶ月</option>
+                            <option value="year">今年</option>
+                            <option value="custom">カスタム期間</option>
+                        </select>
+                    </div>
+                    <button id="refreshAnalysisBtn" class="btn btn-secondary">
+                        <i class="fas fa-sync-alt"></i> 更新
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalAmount">¥0</div>
+                    <div class="stat-label">合計支出</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="receiptCount">0</div>
+                    <div class="stat-label">レシート数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgAmount">¥0</div>
+                    <div class="stat-label">平均支出</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="topCategory">-</div>
+                    <div class="stat-label">最多カテゴリ</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3><i class="fas fa-chart-pie"></i> カテゴリ別支出</h3>
+                <canvas id="categoryChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3><i class="fas fa-chart-bar"></i> 店舗別支出TOP5</h3>
+                <canvas id="storeChart"></canvas>
+            </div>
+
+            <div class="analysis-section">
+                <h3><i class="fas fa-shopping-basket"></i> よく買う商品</h3>
+                <div id="topProducts" class="product-list">
+                    <!-- 商品リストが動的に挿入されます -->
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="settings-tab">
+            <div class="section-header">
+                <h2><i class="fas fa-cog"></i> 設定</h2>
+            </div>
+
+            <div class="settings-section">
+                <h3><i class="fas fa-tags"></i> カテゴリ辞書設定</h3>
+                <p class="description">商品名に含まれるキーワードに基づいて自動的にカテゴリを分類します</p>
+
+                <div class="api-key-section"
+                    style="margin-bottom: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                    <h4><i class="fas fa-key"></i> Gemini API設定</h4>
+                    <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
+                        高精度な読み取りと誤字修正のためにGoogle Gemini APIを使用します。
+                    </p>
+                    <div class="form-group">
+                        <label for="geminiApiKey">API Key:</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="geminiApiKey" placeholder="AIzaSy..." style="flex: 1;">
+                            <button id="saveApiKeyBtn" class="btn btn-primary btn-small">保存</button>
+                        </div>
+                        <p id="apiKeyStatus" style="font-size: 0.8rem; margin-top: 0.3rem;"></p>
+                    </div>
+                </div>
+
+                <div class="dictionary-container">
+                    <div class="dictionary-list" id="categoryDictionary">
+                        <!-- カテゴリ辞書が動的に挿入されます -->
+                    </div>
+
+                    <div class="add-keyword-form">
+                        <h4>キーワードを追加</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="newKeyword">キーワード:</label>
+                                <input type="text" id="newKeyword" placeholder="例: キャベツ">
+                            </div>
+                            <div class="form-group">
+                                <label for="newCategory">カテゴリ:</label>
+                                <select id="newCategory">
+                                    <option value="食品">食品</option>
+                                    <option value="雑貨">雑貨</option>
+                                    <option value="日用品">日用品</option>
+                                    <option value="外食">外食</option>
+                                    <option value="その他">その他</option>
+                                </select>
+                            </div>
+                            <button id="addKeywordBtn" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> 追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3><i class="fas fa-database"></i> データ管理</h3>
+                <div class="data-controls">
+                    <button id="exportDataBtn" class="btn btn-secondary">
+                        <i class="fas fa-download"></i> データをエクスポート
+                    </button>
+                    <label for="importFileInput" id="importDataBtn" class="btn btn-secondary">
+                        <i class="fas fa-upload"></i> データをインポート
+                    </label>
+                    <button id="clearDataBtn" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> 全データを削除
+                    </button>
+                    <input type="file" id="importFileInput" class="hidden" accept=".json">
+                </div>
+                <p class="data-info">
+                    現在の保存件数: <span id="dataCount">0</span>件
+                </p>
+            </div>
+
+            <div class="settings-section">
+                <h3><i class="fas fa-info-circle"></i> アプリ情報</h3>
+                <div class="app-info">
+                    <p><strong>バージョン:</strong> 1.0.0</p>
+                    <p><strong>技術:</strong> HTML/CSS/JavaScript, Tesseract.js, IndexedDB</p>
+                    <p><strong>説明:</strong> レシートを撮影して自動で家計簿を作成できるWebアプリです。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- レシート詳細/編集モーダル -->
+        <div id="receiptModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>レシート詳細</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="receiptForm">
+                        <div class="form-group">
+                            <label for="editDate">日付:</label>
+                            <input type="date" id="editDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editStore">店舗名:</label>
+                            <input type="text" id="editStore" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editTotal">合計金額:</label>
+                            <input type="number" id="editTotal" required min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>商品リスト:</label>
+                            <div class="items-header-row">
+                                <span>商品名</span>
+                                <span>価格</span>
+                                <span>カテゴリ</span>
+                                <span></span>
+                            </div>
+                            <div id="editItemsContainer" class="items-container">
+                                <!-- 動的にアイテム行が追加されます -->
+                            </div>
+                            <button type="button" id="addItemBtn" class="btn btn-secondary btn-small">
+                                <i class="fas fa-plus"></i> 商品を追加
+                            </button>
+                            <div id="itemsSummary" class="items-summary-text">
+                                <!-- 合計と差額がここに表示されます -->
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>レシート画像:</label>
+                            <div class="modal-image-container">
+                                <img id="editImagePreview" src="" alt="レシート画像" class="hidden">
+                                <div id="noImageText" class="no-image-text">画像がありません</div>
+                            </div>
+                            <div class="modal-image-actions">
+                                <label for="fileInput" id="changeImageBtn" class="btn btn-secondary btn-small">
+                                    <i class="fas fa-image"></i> 画像を変更・追加
+                                </label>
+                                <button type="button" id="removeImageBtn" class="btn btn-danger btn-small hidden">
+                                    <i class="fas fa-times"></i> 削除
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="editMemo">メモ:</label>
+                            <textarea id="editMemo" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button id="saveReceiptBtn" class="btn btn-primary">保存</button>
+                    <button id="deleteReceiptBtn" class="btn btn-danger">削除</button>
+                    <button class="btn btn-secondary modal-close">キャンセル</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 確認モーダル -->
+        <div id="confirmModal" class="modal hidden">
+            <div class="modal-content small">
+                <div class="modal-body">
+                    <p id="confirmMessage">本当に削除しますか？</p>
+                </div>
+                <div class="modal-footer">
+                    <button id="confirmOk" class="btn btn-danger">はい</button>
+                    <button id="confirmCancel" class="btn btn-secondary">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
