@@ -107,15 +107,6 @@ export function setupEventListeners() {
     const analysisPeriod = document.getElementById('analysisPeriod');
     if (analysisPeriod) analysisPeriod.addEventListener('change', updateAnalysis);
 
-    // 分析更新ボタン
-    const refreshAnalysisBtn = document.getElementById('refreshAnalysisBtn');
-    if (refreshAnalysisBtn) {
-        refreshAnalysisBtn.addEventListener('click', () => {
-            console.log('分析データを手動更新中...');
-            updateAnalysis();
-        });
-    }
-
     // キーワード追加
     const addKeywordBtn = document.getElementById('addKeywordBtn');
     if (addKeywordBtn) addKeywordBtn.addEventListener('click', addKeywordToDictionary);

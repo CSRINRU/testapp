@@ -4,123 +4,100 @@ import { AppState } from './state.js';
  * 分析データの更新
  */
 export function updateAnalysis() {
-    try {
-        console.log('updateAnalysis called. Receipts count:', AppState.receipts?.length || 0);
-
-        if (!AppState.receipts || AppState.receipts.length === 0) {
-            // データがない場合の表示
-            console.log('No receipts found, displaying empty state');
-            displayEmptyAnalysis();
-            return;
-        }
-
-        // 分析期間の取得
-        const periodEl = document.getElementById('analysisPeriod');
-        const period = periodEl ? periodEl.value : 'month';
-        let filteredReceipts = [...AppState.receipts];
-
-        if (period !== 'custom') {
-            const now = new Date();
-            let startDate;
-
-            switch (period) {
-                case 'month':
-                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                    break;
-                case 'lastMonth':
-                    startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-                    filteredReceipts = filteredReceipts.filter(receipt => {
-                        const receiptDate = new Date(receipt.date);
-                        return receiptDate >= startDate && receiptDate <= endDate;
-                    });
-                    break;
-                case '3months':
-                    startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-                    break;
-                case 'year':
-                    startDate = new Date(now.getFullYear(), 0, 1);
-                    break;
-            }
-
-            if (period !== 'lastMonth' && startDate) {
-                filteredReceipts = filteredReceipts.filter(receipt => {
-                    return new Date(receipt.date) >= startDate;
-                });
-            }
-        }
-
-        console.log('Filtered receipts count:', filteredReceipts.length);
-
-        // 基本統計
-        const totalAmount = filteredReceipts.reduce((sum, receipt) => sum + (Number(receipt.total) || 0), 0);
-        const receiptCount = filteredReceipts.length;
-        const avgAmount = receiptCount > 0 ? Math.round(totalAmount / receiptCount) : 0;
-
-        console.log('Total amount:', totalAmount, 'Receipt count:', receiptCount, 'Avg:', avgAmount);
-
-        // 最多カテゴリ (アイテムベースで集計)
-        const categoryCount = {};
-        filteredReceipts.forEach(receipt => {
-            if (Array.isArray(receipt.items) && receipt.items.length > 0) {
-                receipt.items.forEach(item => {
-                    const cat = item.category || 'その他';
-                    categoryCount[cat] = (categoryCount[cat] || 0) + 1;
-                });
-            } else {
-                // itemsがない、空の場合はレシート自体のカテゴリを使うか、未分類とするか
-                // ここではitemsがあることを前提としているが、古いデータのためにfallback
-                // itemがない場合はカウントしない、または「不明」とする
-            }
-        });
-
-        let topCategory = '-';
-        let maxCount = 0;
-        for (const [category, count] of Object.entries(categoryCount)) {
-            if (count > maxCount) {
-                maxCount = count;
-                topCategory = category;
-            }
-        }
-
-        // 統計を表示
+    if (AppState.receipts.length === 0) {
+        // データがない場合の表示
         const totalAmountEl = document.getElementById('totalAmount');
         const receiptCountEl = document.getElementById('receiptCount');
         const avgAmountEl = document.getElementById('avgAmount');
         const topCategoryEl = document.getElementById('topCategory');
 
-        if (totalAmountEl) totalAmountEl.textContent = `¥${totalAmount.toLocaleString()}`;
-        if (receiptCountEl) receiptCountEl.textContent = receiptCount;
-        if (avgAmountEl) avgAmountEl.textContent = `¥${avgAmount.toLocaleString()}`;
-        if (topCategoryEl) topCategoryEl.textContent = topCategory;
+        if (totalAmountEl) totalAmountEl.textContent = '¥0';
+        if (receiptCountEl) receiptCountEl.textContent = '0';
+        if (avgAmountEl) avgAmountEl.textContent = '¥0';
+        if (topCategoryEl) topCategoryEl.textContent = '-';
 
-        // グラフを描画
-        drawCharts(filteredReceipts);
-
-        // よく買う商品を表示
-        updateTopProducts(filteredReceipts);
-    } catch (error) {
-        console.error('分析データの更新中にエラーが発生しました:', error);
-        displayEmptyAnalysis(); // エラー時は空表示にするなど
+        // グラフをクリア
+        clearCharts();
+        return;
     }
-}
 
-/**
- * データがない/エラー時の表示
- */
-function displayEmptyAnalysis() {
+    // 分析期間の取得
+    const periodEl = document.getElementById('analysisPeriod');
+    const period = periodEl ? periodEl.value : 'month';
+    let filteredReceipts = [...AppState.receipts];
+
+    if (period !== 'custom') {
+        const now = new Date();
+        let startDate;
+
+        switch (period) {
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                break;
+            case 'lastMonth':
+                startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+                filteredReceipts = filteredReceipts.filter(receipt => {
+                    const receiptDate = new Date(receipt.date);
+                    return receiptDate >= startDate && receiptDate <= endDate;
+                });
+                break;
+            case '3months':
+                startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                break;
+        }
+
+        if (period !== 'lastMonth' && startDate) {
+            filteredReceipts = filteredReceipts.filter(receipt => {
+                return new Date(receipt.date) >= startDate;
+            });
+        }
+    }
+
+    // 基本統計
+    const totalAmount = filteredReceipts.reduce((sum, receipt) => sum + receipt.total, 0);
+    const receiptCount = filteredReceipts.length;
+    const avgAmount = receiptCount > 0 ? Math.round(totalAmount / receiptCount) : 0;
+
+    // 最多カテゴリ (アイテムベースで集計)
+    const categoryCount = {};
+    filteredReceipts.forEach(receipt => {
+        if (receipt.items && receipt.items.length > 0) {
+            receipt.items.forEach(item => {
+                const cat = item.category || 'その他';
+                categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+            });
+        }
+    });
+
+    let topCategory = '-';
+    let maxCount = 0;
+    for (const [category, count] of Object.entries(categoryCount)) {
+        if (count > maxCount) {
+            maxCount = count;
+            topCategory = category;
+        }
+    }
+
+    // 統計を表示
     const totalAmountEl = document.getElementById('totalAmount');
     const receiptCountEl = document.getElementById('receiptCount');
     const avgAmountEl = document.getElementById('avgAmount');
     const topCategoryEl = document.getElementById('topCategory');
 
-    if (totalAmountEl) totalAmountEl.textContent = '¥0';
-    if (receiptCountEl) receiptCountEl.textContent = '0';
-    if (avgAmountEl) avgAmountEl.textContent = '¥0';
-    if (topCategoryEl) topCategoryEl.textContent = '-';
+    if (totalAmountEl) totalAmountEl.textContent = `¥${totalAmount.toLocaleString()}`;
+    if (receiptCountEl) receiptCountEl.textContent = receiptCount;
+    if (avgAmountEl) avgAmountEl.textContent = `¥${avgAmount.toLocaleString()}`;
+    if (topCategoryEl) topCategoryEl.textContent = topCategory;
 
-    // グラフをクリア
-    clearCharts();
+    // グラフを描画
+    drawCharts(filteredReceipts);
+
+    // よく買う商品を表示
+    updateTopProducts(filteredReceipts);
 }
 
 /**
@@ -171,11 +148,10 @@ export function drawCategoryChart(receipts) {
 
     receipts.forEach(receipt => {
         let itemsTotal = 0;
-        const receiptTotal = Number(receipt.total) || 0;
 
-        if (Array.isArray(receipt.items) && receipt.items.length > 0) {
+        if (receipt.items && receipt.items.length > 0) {
             receipt.items.forEach(item => {
-                const amount = Number(item.amount) || 0; // 金額がない場合は0
+                const amount = item.amount || 0; // 金額がない場合は0
                 const cat = item.category || 'その他';
                 categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
                 itemsTotal += amount;
@@ -183,13 +159,9 @@ export function drawCategoryChart(receipts) {
         }
 
         // 差額を「不明」として計上 (レシート合計 > アイテム合計の場合のみ)
-        // わずかな計算誤差を許容するか、あるいはStrictにするか。ここでは単純比較。
-        if (receiptTotal > itemsTotal) {
-            const diff = receiptTotal - itemsTotal;
-            // 差額が大きすぎる場合（例えば全額など）も考慮
-            if (diff > 0) {
-                categoryTotals['不明'] = (categoryTotals['不明'] || 0) + diff;
-            }
+        if (receipt.total > itemsTotal) {
+            const diff = receipt.total - itemsTotal;
+            categoryTotals['不明'] = (categoryTotals['不明'] || 0) + diff;
         }
     });
 
@@ -262,9 +234,7 @@ export function drawStoreChart(receipts) {
     // 店舗別合計を計算
     const storeTotals = {};
     receipts.forEach(receipt => {
-        const total = Number(receipt.total) || 0;
-        const store = receipt.store || '未設定';
-        storeTotals[store] = (storeTotals[store] || 0) + total;
+        storeTotals[receipt.store] = (storeTotals[receipt.store] || 0) + receipt.total;
     });
 
     // トップ5を抽出
@@ -348,26 +318,23 @@ export function updateTopProducts(receipts) {
     // 商品名の出現回数をカウント
     const productCount = {};
     receipts.forEach(receipt => {
-        if (!Array.isArray(receipt.items)) return;
-
         receipt.items.forEach(item => {
             // 商品名を取得
             let name;
             let count = 1;
 
-            if (typeof item === 'object' && item !== null && item.name) {
+            if (typeof item === 'object' && item.name) {
                 name = item.name;
-                count = Number(item.count) || 1;
-            } else if (typeof item === 'string') {
-                name = item;
+                count = item.count || 1;
             } else {
-                return; // スキップ
+                name = item;
             }
 
             // 簡易的に商品名をキーにする
             const cleanItem = String(name).trim().substring(0, 30);
             if (cleanItem) {
                 // 個数分を加算 (countが取得できればその分、なければ1)
+                // 単純な頻度分析なら +1 だが、個数情報があるので加味する
                 productCount[cleanItem] = (productCount[cleanItem] || 0) + count;
             }
         });
