@@ -1,37 +1,108 @@
-import { AppState } from './state.js';
-
-import { OnnxOCR } from './onnx_ocr.js';
+import { store } from './store.js';
 import { setupPreprocessingUI } from './preprocessing_ui.js';
 import { geminiService } from './gemini.js';
-import { CATEGORY_IDS, MINOR_CATEGORY_DICTIONARY } from './constants.js';
+import { CATEGORY_IDS } from './constants.js';
 
-// OCRインスタンス
-export const ocrEngine = new OnnxOCR();
+// Workerの初期化
+const worker = new Worker('js/ocr_worker.js');
+
+// メッセージID管理
+let messageIdCounter = 0;
+const pendingPromises = new Map();
+
+// Workerからのメッセージハンドラ
+worker.onmessage = (e) => {
+    const { type, payload, error, messageId } = e.data;
+
+    if (pendingPromises.has(messageId)) {
+        const { resolve, reject } = pendingPromises.get(messageId);
+        pendingPromises.delete(messageId);
+
+        if (type === 'ERROR') {
+            reject(new Error(error));
+        } else {
+            resolve(payload);
+        }
+    } else {
+        // console.warn('Received message for unknown ID:', messageId, e.data);
+    }
+};
+
+worker.onerror = (err) => {
+    console.error('Worker Error:', err);
+};
+
+// Workerへのリクエスト送信ヘルパー
+function postWorkerMessage(type, payload, transferList = []) {
+    return new Promise((resolve, reject) => {
+        const messageId = messageIdCounter++;
+        pendingPromises.set(messageId, { resolve, reject });
+        worker.postMessage({ type, payload, messageId }, transferList);
+    });
+}
+
+// 初期化フラグ
+let isWorkerInitialized = false;
+
+// デフォルトパラメータ
+export const defaultOCRParams = {
+    limitSideLen: 2000,
+    detDbThresh: 0.4,
+    detDbBoxThresh: 0.6,
+    recScoreThresh: 0.6,
+    preprocessContrast: 1.3,
+    enableContrast: true,
+    enableSharpening: true
+};
 
 /**
- * OCR処理関数（独立した関数として設計）
+ * OCRエンジンの初期化 (必要に応じて呼び出される)
+ */
+async function initOCR() {
+    if (isWorkerInitialized) return;
+
+    const progressText = document.getElementById('progressText');
+    if (progressText) progressText.textContent = '初期化中...';
+
+    await postWorkerMessage('INIT', {});
+    isWorkerInitialized = true;
+}
+
+/**
+ * プレビュー用画像前処理
+ * @param {string} imageData Base64
+ * @param {Object} params 
+ * @returns {Promise<ImageBitmap>}
+ */
+export async function getPreprocessedPreview(imageData, params) {
+    if (!isWorkerInitialized) await initOCR();
+    // Base64からBlobを作成して転送してもよいが、Worker側でfetchもできる
+    // 効率のため、ここではBase64文字列を渡す (WorkerのloadImageが対応済み)
+    return await postWorkerMessage('PREPROCESS', { image: imageData, params });
+}
+
+/**
+ * OCR処理関数
  * @param {string} imageData 
+ * @param {Object} params (Optional)
  * @returns {Promise<string>} 認識されたテキスト
  */
-export async function processOCR(imageData) {
+export async function processOCR(imageData, params = null) {
     try {
-        // 進捗表示の要素を取得
         const progressText = document.getElementById('progressText');
         const progressFill = document.getElementById('progressFill');
 
         if (progressText) progressText.textContent = 'モデルをロード中...';
 
-        // OCRエンジンの初期化
-        await ocrEngine.init();
+        // 初期化
+        await initOCR();
 
         if (progressText) progressText.textContent = '文字認識中...';
         if (progressFill) progressFill.style.width = '50%';
 
-        // 画像認識の実行
-        // processOCRはPromise<string>を返す必要がある
-        const text = await ocrEngine.recognize(imageData);
+        // 実行
+        const text = await postWorkerMessage('RECOGNIZE', { image: imageData, params });
 
-        // 完了
         if (progressFill) progressFill.style.width = '100%';
         if (progressText) progressText.textContent = '完了';
 
@@ -43,13 +114,12 @@ export async function processOCR(imageData) {
 }
 
 /**
- * 画像処理
+ * 画像処理フロー (UI連携)
  * @param {string} imageData 
  * @param {Function} showReceiptModal 
  */
 export async function processImage(imageData, showReceiptModal) {
-    // 状態を保存
-    AppState.currentImageData = imageData;
+    store.setCurrentImageData(imageData);
 
     // プレビュー表示
     const preview = document.getElementById('selectedImagePreview');
@@ -63,90 +133,72 @@ export async function processImage(imageData, showReceiptModal) {
     if (video) video.classList.add('hidden');
     if (overlay) overlay.classList.add('hidden');
 
-    // 処理中表示（一旦非表示にしてUIを出す）
     const processingSection = document.getElementById('processingSection');
     if (processingSection) processingSection.classList.add('hidden');
 
-    // 前処理UIのセットアップと表示
+    // 前処理UIセットアップ
+    // currentParamsを保持して解析時に渡す
+    let currentParams = { ...defaultOCRParams };
+
     const preprocessingFn = setupPreprocessingUI(
         // Analyze Callback
-        async () => {
-            // 処理中表示
+        async (finalParams) => {
+            if (finalParams) currentParams = finalParams;
             if (processingSection) processingSection.classList.remove('hidden');
 
             try {
-                // OCRエンジンが初期化可能かチェック
-                if (typeof ort === 'undefined') {
-                    throw new Error('ONNX Runtimeがロードされていません。lib/ort.all.min.jsを確認してください。');
-                }
-
                 // OCR処理
-                const text = await processOCR(imageData);
+                const text = await processOCR(imageData, currentParams);
                 console.log('OCR認識結果:', text);
 
                 let receiptData;
+                const progressText = document.getElementById('progressText');
 
-                // Gemini APIが使える場合はそちらを使用
                 if (geminiService.hasApiKey()) {
                     try {
                         if (progressText) progressText.textContent = 'AIで構造化中...';
                         receiptData = await geminiService.structureReceipt(text);
                     } catch (e) {
-                        console.error('Gemini processing failed, falling back to simple extraction', e);
+                        // ... Gemini error handling ...
+                        console.error('Gemini processing failed', e);
                         alert('Geminiでの解析に失敗しました。簡易解析を行います。\n' + e.message);
                         receiptData = extractReceiptData(text);
                     }
                 } else {
-                    // APIキーがない場合は警告して簡易解析 (あるいは設定を促す)
-                    alert('Gemini APIキーが設定されていません。設定タブでキーを入力すると、より高精度な解析が可能です。');
+                    alert('Gemini APIキーが設定されていません。簡易解析を行います。');
                     receiptData = extractReceiptData(text);
                 }
 
-                // カテゴリの整理 (Geminiが返したものを確認、なければデフォルト)
                 if (receiptData.items && receiptData.items.length > 0) {
                     if (progressText) progressText.textContent = 'データ整理中...';
-
                     for (let i = 0; i < receiptData.items.length; i++) {
                         let item = receiptData.items[i];
-                        // オブジェクトでない場合はオブジェクト化 (簡易解析の場合など)
                         if (typeof item === 'string') {
                             item = { name: item, count: 1, amount: 0 };
                             receiptData.items[i] = item;
                         }
-
-                        // カテゴリのデフォルト設定
                         if (!item.major_category) item.major_category = CATEGORY_IDS.OTHER;
                         if (!item.minor_category) item.minor_category = 'ー';
                     }
                 }
 
-                // 画像データも紐付ける
                 receiptData.image = imageData;
 
-                // モーダルで確認・編集
                 if (typeof showReceiptModal === 'function') {
                     showReceiptModal(receiptData);
-                } else {
-                    console.error('確認モーダル表示関数が指定されていません');
-                    alert('データの確認ができませんでした。');
                 }
 
             } catch (error) {
-                alert('レシートの解析に失敗しました。画像を確認してください。\n' + error.message);
-                console.error('解析エラー:', error);
+                alert('レシートの解析に失敗しました。\n' + error.message);
             } finally {
-                // 処理中表示を非表示
                 if (processingSection) processingSection.classList.add('hidden');
 
-                // 解析が終わったらビデオ表示に戻す（3秒後）
+                // Reset View
                 setTimeout(() => {
                     const preview = document.getElementById('selectedImagePreview');
                     const video = document.getElementById('cameraPreview');
-                    const overlay = document.getElementById('cameraOverlay');
-                    // Preprocessing UIも隠す
                     const prepSection = document.getElementById('preprocessing-section');
                     if (prepSection) prepSection.classList.add('hidden');
-
                     if (preview) preview.classList.add('hidden');
                     if (video) video.classList.remove('hidden');
                     if (overlay) overlay.classList.remove('hidden');
@@ -155,55 +207,33 @@ export async function processImage(imageData, showReceiptModal) {
         },
         // Cancel Callback
         () => {
-            // キャンセル時はカメラに戻る
             const preview = document.getElementById('selectedImagePreview');
             const video = document.getElementById('cameraPreview');
-            const overlay = document.getElementById('cameraOverlay');
             if (preview) preview.classList.add('hidden');
             if (video) video.classList.remove('hidden');
             if (overlay) overlay.classList.remove('hidden');
-        }
+        },
+        // Current Params Accessor (if needed, or pass defaults)
+        defaultOCRParams
     );
 
-    // UI表示
     preprocessingFn.show(imageData);
-
-    /*
-    try {
-        // ... OLD LOGIC REMOVED ...
-    */
-    return; // Stop here, wait for callback
-
-    /* 
-       Old Logic was here. We replaced it with the UI flow.
-       The code below is effectively commented out by the fact we return above, 
-       but for cleanliness we should remove it or wrap it. 
-       Since I am replacing the block using `replace_file_content`, I will just provide the new content 
-       and remove the old try/catch block entirely from this section.
-    */
-
-    // NOTE to Agent: The `replace_file_content` will replace the range. 
-    // I need to be careful to match the EndLine correctly to remove the old try/catch completely.
-
 }
 
 /**
- * OCR結果からレシートデータを抽出
- * @param {string} text 
- * @returns {Object} 抽出されたレシートデータ
+ * OCR結果からレシートデータを抽出 (簡易版)
  */
 export function extractReceiptData(text) {
     const receipt = {
-        date: new Date().toISOString().split('T')[0], // デフォルトは今日
+        date: new Date().toISOString().split('T')[0],
         store: '',
         total: 0,
         items: [],
         memo: ''
     };
-
     const lines = text.split('\n').filter(line => line.trim() !== '');
 
-    // 日付の抽出 (YYYY/MM/DD または YYYY-MM-DD 形式を探す)
+    // 日付 (YYYY/MM/DD)
     const dateRegex = /(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/;
     for (const line of lines) {
         const match = line.match(dateRegex);
@@ -213,7 +243,7 @@ export function extractReceiptData(text) {
         }
     }
 
-    // 合計金額の抽出 (「合計」「税込」「￥」「¥」などのキーワードと金額)
+    // 合計
     const totalRegex = /(合計|税込|総額|計)[^\d]*[￥¥]?[\s]*([\d,]+)/;
     for (const line of lines) {
         const match = line.match(totalRegex);
@@ -222,52 +252,37 @@ export function extractReceiptData(text) {
             break;
         }
     }
-
-    // 金額が抽出できなかった場合は、行から最も大きい数字を探す
     if (receipt.total === 0) {
-        let maxAmount = 0;
+        let max = 0;
         const amountRegex = /[￥¥]?[\s]*([\d,]+)/g;
-
         for (const line of lines) {
             let match;
             while ((match = amountRegex.exec(line)) !== null) {
-                const amount = parseInt(match[1].replace(/,/g, '')) || 0;
-                if (amount > maxAmount && amount < 100000) { // 10万円未満を対象
-                    maxAmount = amount;
-                }
+                const val = parseInt(match[1].replace(/,/g, '')) || 0;
+                if (val > max && val < 500000) max = val;
             }
         }
-        receipt.total = maxAmount;
+        receipt.total = max;
     }
 
-    // 店舗名の抽出 (最初の数行から探す)
+    // 店舗 (簡易)
     for (let i = 0; i < Math.min(3, lines.length); i++) {
         const line = lines[i].trim();
-        // 日付や金額を含まない行を店舗名候補とする
         if (!line.match(dateRegex) && !line.match(/[￥¥][\d,]+/)) {
-            receipt.store = line.substring(0, 50); // 長すぎる場合は切り詰め
+            receipt.store = line.substring(0, 50);
             break;
         }
     }
 
-    // 商品名の抽出 (簡易的に「行に商品名らしきもの」を抽出)
-    const itemRegex = /^[^￥¥\d]*[^\d]{2,}/; // 数字で始まらず、2文字以上
+    // Items (簡易)
+    const itemRegex = /^[^￥¥\d]*[^\d]{2,}/;
     for (const line of lines) {
-        const cleanLine = line.trim();
-        // 日付、店舗名、合計などではない行を商品候補とする
-        if (!cleanLine.match(dateRegex) &&
-            !cleanLine.match(totalRegex) &&
-            cleanLine !== receipt.store &&
-            cleanLine.match(itemRegex) &&
-            cleanLine.length > 1) {
-            receipt.items.push(cleanLine.substring(0, 100)); // 長すぎる場合は切り詰め
+        const cl = line.trim();
+        if (!cl.match(dateRegex) && !cl.match(totalRegex) && cl !== receipt.store && cl.match(itemRegex) && cl.length > 1) {
+            receipt.items.push(cl.substring(0, 100));
         }
     }
-
-    // 商品が抽出できない場合はサンプルデータを追加
-    if (receipt.items.length === 0) {
-        receipt.items = ['商品1', '商品2', '商品3'];
-    }
+    if (receipt.items.length === 0) receipt.items = ['商品1', '商品2'];
 
     return receipt;
 }

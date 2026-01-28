@@ -1,8 +1,8 @@
 /**
- * OnnxOCR: PaddleOCRをブラウザで動作させるクラス
+ * OnnxOCR: PaddleOCRをブラウザ(Web Worker)で動作させるクラス
  * onnxruntime-webを使用
  */
-export class OnnxOCR {
+class OnnxOCR {
     constructor() {
         this.detSession = null;
         this.recSession = null;
@@ -21,7 +21,7 @@ export class OnnxOCR {
         this.preprocessContrast = 1.3;
         this.enableContrast = true;     // コントラスト強調のOn/Off
         this.enableSharpening = true;   // シャープニングのOn/Off
-        this.lastPreprocessedImage = null; // デバッグ用: 前処理後の画像
+        this.lastPreprocessedImage = null; // デバッグ用: 前処理後の画像 (WorkerではDataURL化はコスト高いのでnullか必要時のみ)
     }
 
     /**
@@ -33,7 +33,6 @@ export class OnnxOCR {
         try {
             // WASMパスの設定 (lib/フォルダにあると仮定)
             // サーバーのルートからの絶対パスを指定して曖昧さを排除する
-            // Live Serverなどの場合、ルートがプロジェクトルートになるため '/lib/' で動作するはず
             ort.env.wasm.wasmPaths = '/lib/';
 
             // 文字コード表の読み込み
@@ -41,15 +40,15 @@ export class OnnxOCR {
 
             // モデルの読み込み
             const sessionOptions = {
-                executionProviders: ['wasm'], // WebGLなどが使えるなら 'webgl' も可
+                executionProviders: ['wasm'],
                 graphOptimizationLevel: 'all'
             };
 
             console.log('Loading detection model...');
-            this.detSession = await ort.InferenceSession.create('./models/ppocrv5/det/det.onnx', sessionOptions);
+            this.detSession = await ort.InferenceSession.create('/models/ppocrv5/det/det.onnx', sessionOptions);
 
             console.log('Loading recognition model...');
-            this.recSession = await ort.InferenceSession.create('./models/ppocrv5/rec/rec.onnx', sessionOptions);
+            this.recSession = await ort.InferenceSession.create('/models/ppocrv5/rec/rec.onnx', sessionOptions);
 
             this.isInitialized = true;
             console.log('OCR Models initialized successfully');
@@ -63,7 +62,9 @@ export class OnnxOCR {
      * 文字コード表の読み込み
      */
     async loadKeys() {
-        const response = await fetch('./models/ppocrv5/ppocrv5_dict.txt');
+        // Worker環境では相対パスはWorkerスクリプトからの相対になる
+        // /models/... でルート指定が無難
+        const response = await fetch('/models/ppocrv5/ppocrv5_dict.txt');
         const text = await response.text();
         // 行ごとに分割して配列にする
         this.keys = text.split('\n');
@@ -71,18 +72,16 @@ export class OnnxOCR {
         if (this.keys[this.keys.length - 1] === '') {
             this.keys.pop();
         }
-        // スペースを最後に追加（CTCデコード用） -> index 0がblankの場合は不要、あるいはkeysに含まれている前提
-        // this.keys.push(' '); 
     }
 
     /**
      * 画像からテキストを抽出（メイン処理）
-     * @param {string|HTMLImageElement} imageSource 
+     * @param {string|Blob|ImageBitmap} imageSource 
      */
     async recognize(imageSource) {
         if (!this.isInitialized) await this.init();
 
-        // 画像の読み込みとCanvas化
+        // 画像の読み込みとImageBitmap化
         const originalImage = await this.loadImage(imageSource);
 
         // 画像前処理（コントラスト強調・シャープニング）
@@ -132,18 +131,21 @@ export class OnnxOCR {
         // 4. 同一行のテキストを結合
         const lines = this.mergeToLines(results);
 
+        // リソース解放
+        if (originalImage.close) originalImage.close();
+        // preprocessImageで作成したcanvasなどのGPUリソースはGC任せだが、closeできるならすべき
+        // OffscreenCanvasはexplicit closeがないが、ImageBitmapはcloseすべき
+
         return lines.join('\n');
     }
 
     /**
      * 画像前処理（コントラスト強調・シャープニング）
-     * @param {HTMLImageElement} image 
-     * @returns {HTMLCanvasElement}
+     * @param {ImageBitmap} image 
+     * @returns {OffscreenCanvas}
      */
     preprocessImage(image) {
-        const canvas = document.createElement('canvas');
-        canvas.width = image.width;
-        canvas.height = image.height;
+        const canvas = new OffscreenCanvas(image.width, image.height);
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, 0, 0);
 
@@ -196,8 +198,8 @@ export class OnnxOCR {
             ctx.putImageData(sharpened, 0, 0);
         }
 
-        // デバッグ用に保存
-        this.lastPreprocessedImage = canvas.toDataURL();
+        // WorkerではtoDataURLは非同期だが、ここではデバッグ表示しないので省略
+        // this.lastPreprocessedImage = ... 
 
         return canvas;
     }
@@ -283,7 +285,7 @@ export class OnnxOCR {
 
     // --- Detection Logic ---
 
-    async detectText(image) {
+    async detectText(image) { // image is OffscreenCanvas
         // 画像の前処理 (Resize & Normalize)
         const { tensor, ratioH, ratioW, newH, newW } = await this.preprocessDet(image);
 
@@ -292,10 +294,7 @@ export class OnnxOCR {
         const results = await this.detSession.run(feeds);
         const output = results[this.detSession.outputNames[0]]; // shape: [1, 1, H, W]
 
-        // 後処理 (Bitmap -> Boxes)
-        // 簡易実装: ピクセルごとのスコアを見て、繋がっている領域をボックスとする
-        // 注: 完全なDBPostProcessはJSでは重いため、簡易的な閾値処理を行う
-
+        // 後処理
         const mapData = output.data;
         const boxes = this.postprocessDetSimple(mapData, newW, newH, ratioW, ratioH);
 
@@ -327,9 +326,7 @@ export class OnnxOCR {
         const ratioW = resizeW / w;
 
         // Canvasでリサイズ
-        const canvas = document.createElement('canvas');
-        canvas.width = resizeW;
-        canvas.height = resizeH;
+        const canvas = new OffscreenCanvas(resizeW, resizeH);
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, 0, 0, resizeW, resizeH);
 
@@ -356,17 +353,7 @@ export class OnnxOCR {
     }
 
     postprocessDetSimple(mapData, width, height, ratioW, ratioH) {
-        // 非常に簡易的な実装:
-        // ピクセルマップ全体をスキャンし、閾値以上の領域をまとめる代わりに
-        // 全体のヒートマップから単純に外接矩形を取得するのではなく、
-        // 連結成分分析の代わりに、単純に画像をグリッドで見てテキストがありそうな領域を大まかに特定する
-
-        // ※実際にはJSでopencvなしでポリゴン検出は難しいので、
-        // ここでは「閾値を超えたピクセルの集合」をある程度の塊としてボックス化するロジックが必要だが、
-        // 簡易化のため、行単位のスキャンを行い、Y軸方向のヒストグラムを作成してからX軸を見る手法をとる（Projection Profile）
-
         const boxes = [];
-
         // 1. 行ごとのスコア合計を計算 (Y Projection)
         const yProj = new Float32Array(height);
         for (let y = 0; y < height; y++) {
@@ -383,12 +370,11 @@ export class OnnxOCR {
         let inBlock = false;
         let startY = 0;
         for (let y = 0; y < height; y++) {
-            if (!inBlock && yProj[y] > 5) { // 閾値: 幅5px以上テキストピクセルがあるか
+            if (!inBlock && yProj[y] > 5) {
                 inBlock = true;
                 startY = y;
             } else if (inBlock && yProj[y] <= 5) {
                 inBlock = false;
-                // 行が見つかったので、この行の中でX方向の塊を探す
                 this.findBoxesInRow(mapData, width, startY, y, ratioW, ratioH, boxes);
             }
         }
@@ -400,9 +386,8 @@ export class OnnxOCR {
     }
 
     findBoxesInRow(mapData, width, startY, endY, ratioW, ratioH, boxes) {
-        // 部分的なボックス探索
         const height = endY - startY;
-        if (height < 5) return; // 小さすぎる行は無視
+        if (height < 5) return;
 
         // X Projection
         const xProj = new Float32Array(width);
@@ -424,7 +409,6 @@ export class OnnxOCR {
                 startX = x;
             } else if (inBlock && xProj[x] <= 2) {
                 inBlock = false;
-                // Box発見
                 boxes.push({
                     x: Math.round(startX / ratioW),
                     y: Math.round(startY / ratioH),
@@ -460,21 +444,15 @@ export class OnnxOCR {
     }
 
     async preprocessRec(canvas) {
-        // PaddleOCR v4 rec shape: [3, 48, 320] (dynamic width supported usually, but simplify to fixed or ratio)
-        // ここでは 3, 48, W としてリサイズ
-
+        // PaddleOCR v4 rec shape: [3, 48, 320] etc.
         let h = canvas.height;
         let w = canvas.width;
 
         const imgH = this.recImgH; // 48
         const ratio = imgH / h;
         const imgW = Math.round(w * ratio);
-        // 幅は320に制限せず、アスペクト比を維持してリサイズ（ただし最大幅などは考慮してもよいが、動的幅に対応しているモデルならOK）
-        // onnx入力形状を確認できないが、動的ならOK。固定ならパディングが必要。PP-OCRv4はたいてい動的。
 
-        const resizeCanvas = document.createElement('canvas');
-        resizeCanvas.width = imgW;
-        resizeCanvas.height = imgH;
+        const resizeCanvas = new OffscreenCanvas(imgW, imgH);
         const ctx = resizeCanvas.getContext('2d');
         ctx.drawImage(canvas, 0, 0, imgW, imgH);
 
@@ -497,14 +475,12 @@ export class OnnxOCR {
     }
 
     decodeRec(data, dims) {
-        // dims: [1, seq_len, vocab_size]
         const seqLen = dims[1];
         const vocabSize = dims[2];
 
         let charIndices = [];
         let confidences = [];
 
-        // Argmax
         for (let i = 0; i < seqLen; i++) {
             let maxScore = -Infinity;
             let maxIdx = 0;
@@ -520,12 +496,7 @@ export class OnnxOCR {
             confidences.push(maxScore);
         }
 
-        // CTC Decode (重複削除 & blank削除)
-        // ONNXのPaddleOCRモデル（Rec）は通常、Index 0 が Blank。
-        // 文字リスト(keys)にはBlankは含まれず、1-based indexでアクセスする。
-
         const blankIdx = 0;
-
         let sb = '';
         let lastIdx = -1;
         let scoreSum = 0;
@@ -533,15 +504,7 @@ export class OnnxOCR {
 
         for (let i = 0; i < seqLen; i++) {
             const idx = charIndices[i];
-
-            // blank判定かつ前回と違う文字
-            // (CTCは同じ文字が連続する場合は間にblankが必要。連続する同じ文字は1つにまとめられる)
-            // 実装: 
-            // 1. 重複を除去 (idx != lastIdx)
-            // 2. blankを除去 (idx != blankIdx)
-
             if (idx !== lastIdx && idx !== blankIdx) {
-                // index 0 が blank なので、文字配列へのアクセスは idx - 1
                 const charIdx = idx - 1;
                 if (charIdx >= 0 && charIdx < this.keys.length) {
                     sb += this.keys[charIdx];
@@ -560,28 +523,28 @@ export class OnnxOCR {
 
     // --- Helpers ---
 
-    loadImage(src) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = src;
-        });
+    async loadImage(src) {
+        if (typeof ImageBitmap !== 'undefined' && src instanceof ImageBitmap) {
+            return src;
+        }
+        if (typeof Blob !== 'undefined' && src instanceof Blob) {
+            return createImageBitmap(src);
+        }
+        if (typeof src === 'string') {
+            const response = await fetch(src);
+            const blob = await response.blob();
+            return createImageBitmap(blob);
+        }
+        throw new Error('Unsupported image source by OnnxOCR Worker');
     }
 
     cropImage(image, box) {
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, box.w);
-        canvas.height = Math.max(1, box.h);
+        const canvas = new OffscreenCanvas(Math.max(1, box.w), Math.max(1, box.h));
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, box.x, box.y, box.w, box.h, 0, 0, canvas.width, canvas.height);
         return canvas;
     }
 
-    /**
-     * パラメータを一括設定
-     * @param {Object} params 
-     */
     setParams(params) {
         if (typeof params.detDbThresh === 'number') this.detDbThresh = params.detDbThresh;
         if (typeof params.detDbBoxThresh === 'number') this.detDbBoxThresh = params.detDbBoxThresh;
@@ -591,7 +554,8 @@ export class OnnxOCR {
 
         if (typeof params.enableContrast === 'boolean') this.enableContrast = params.enableContrast;
         if (typeof params.enableSharpening === 'boolean') this.enableSharpening = params.enableSharpening;
-
-        console.log('OCR Params updated:', params);
     }
 }
+
+// Global scope attachment for importScripts
+self.OnnxOCR = OnnxOCR;

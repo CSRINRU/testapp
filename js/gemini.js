@@ -88,10 +88,21 @@ ${text}
             }
 
             const data = await response.json();
-            const jsonText = data.candidates[0].content.parts[0].text;
+            console.log("Gemini Response Data:", data);
+            const rawText = data.candidates[0].content.parts[0].text;
+            console.log("Gemini Extracted Text:", rawText);
+
+            // JSON部分のみを抽出（```json ... ``` や説明文が含まれる場合の対策）
+            const jsonStartIndex = rawText.indexOf('{');
+            const jsonEndIndex = rawText.lastIndexOf('}');
+
+            let jsonString = rawText;
+            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+                jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1);
+            }
 
             // JSONパース
-            const parsedData = JSON.parse(jsonText);
+            const parsedData = JSON.parse(jsonString);
 
             // カテゴリをIDに変換してマッピング
             if (parsedData.items && Array.isArray(parsedData.items)) {

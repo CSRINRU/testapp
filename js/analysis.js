@@ -1,11 +1,12 @@
-import { AppState } from './state.js';
+import { store } from './store.js';
 import { MAJOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS } from './constants.js';
 
 /**
  * 分析データの更新
  */
 export function updateAnalysis() {
-    if (AppState.receipts.length === 0) {
+    const receipts = store.state.receipts;
+    if (receipts.length === 0) {
         // データがない場合の表示
         const totalAmountEl = document.getElementById('totalAmount');
         const receiptCountEl = document.getElementById('receiptCount');
@@ -25,7 +26,7 @@ export function updateAnalysis() {
     // 分析期間の取得
     const periodEl = document.getElementById('analysisPeriod');
     const period = periodEl ? periodEl.value : 'month';
-    let filteredReceipts = [...AppState.receipts];
+    let filteredReceipts = [...receipts];
 
     if (period !== 'custom') {
         const now = new Date();

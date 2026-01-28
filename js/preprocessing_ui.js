@@ -1,7 +1,7 @@
 
-import { ocrEngine } from './ocr.js';
+import { getPreprocessedPreview } from './ocr.js';
 
-export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback) {
+export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaultParams) {
     const section = document.getElementById('preprocessing-section');
     const processedCanvas = document.getElementById('prepProcessedCanvas');
 
@@ -30,46 +30,39 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback) {
     if (!section || !processedCanvas) return;
 
     // State
-    let currentImage = null; // Image object
-    let currentLimitSide = 2000;
+    let currentImageDataUrl = null;
+    let currentParams = { ...defaultParams };
+    let previewPending = false;
 
     // Helpers
-    const bindSlider = (slider, display, paramName, callback) => {
+    const bindSlider = (slider, display, paramName, needsPreview = false) => {
         slider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             display.textContent = val;
-            const params = {};
-            params[paramName] = val;
-            ocrEngine.setParams(params);
-
-            if (callback) callback(val);
+            currentParams[paramName] = val;
+            if (needsPreview) requestPreviewUpdate();
         });
     };
 
-    const bindCheckbox = (checkbox, paramName, callback) => {
+    const bindCheckbox = (checkbox, paramName, needsPreview = false) => {
         checkbox.addEventListener('change', (e) => {
             const val = e.target.checked;
-            const params = {};
-            params[paramName] = val;
-            ocrEngine.setParams(params);
-            if (callback) callback();
+            currentParams[paramName] = val;
+            if (needsPreview) requestPreviewUpdate();
         });
     };
 
     // Bindings
-    bindSlider(sliderContrast, dispContrast, 'preprocessContrast', updatePreview);
-    bindCheckbox(checkContrast, 'enableContrast', updatePreview);
+    bindSlider(sliderContrast, dispContrast, 'preprocessContrast', true);
+    bindCheckbox(checkContrast, 'enableContrast', true);
 
-    bindCheckbox(checkSharpening, 'enableSharpening', updatePreview);
+    bindCheckbox(checkSharpening, 'enableSharpening', true);
 
-    bindSlider(sliderLimitSide, dispLimitSide, 'limitSideLen', (val) => {
-        currentLimitSide = val;
-        updatePreview(); // Re-draw frame
-    });
+    bindSlider(sliderLimitSide, dispLimitSide, 'limitSideLen', true);
 
-    bindSlider(sliderDetThresh, dispDetThresh, 'detDbThresh');
-    bindSlider(sliderBoxThresh, dispBoxThresh, 'detDbBoxThresh');
-    bindSlider(sliderRecThresh, dispRecThresh, 'recScoreThresh');
+    bindSlider(sliderDetThresh, dispDetThresh, 'detDbThresh', false);
+    bindSlider(sliderBoxThresh, dispBoxThresh, 'detDbBoxThresh', false);
+    bindSlider(sliderRecThresh, dispRecThresh, 'recScoreThresh', false);
 
     cancelBtn.addEventListener('click', () => {
         hide();
@@ -78,96 +71,94 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback) {
 
     analyzeBtn.addEventListener('click', () => {
         hide();
-        // Proceed with OCR
-        if (onAnalyzeCallback) onAnalyzeCallback();
+        // Return current params
+        if (onAnalyzeCallback) onAnalyzeCallback(currentParams);
     });
 
     function show(imageDataUrl) {
+        currentImageDataUrl = imageDataUrl;
         section.classList.remove('hidden');
-        document.querySelector('.camera-container').classList.add('hidden'); // Hide camera view
+        document.querySelector('.camera-container').classList.add('hidden');
 
-        // Load image for processing
-        const img = new Image();
-        img.onload = () => {
-            currentImage = img;
+        // Init controls
+        sliderContrast.value = currentParams.preprocessContrast;
+        dispContrast.textContent = currentParams.preprocessContrast;
+        checkContrast.checked = currentParams.enableContrast;
 
-            // Init controls from current engine values
-            sliderContrast.value = ocrEngine.preprocessContrast;
-            dispContrast.textContent = ocrEngine.preprocessContrast;
-            checkContrast.checked = ocrEngine.enableContrast;
+        checkSharpening.checked = currentParams.enableSharpening;
 
-            checkSharpening.checked = ocrEngine.enableSharpening;
+        sliderLimitSide.value = currentParams.limitSideLen;
+        dispLimitSide.textContent = currentParams.limitSideLen;
 
-            sliderLimitSide.value = ocrEngine.limitSideLen;
-            dispLimitSide.textContent = ocrEngine.limitSideLen;
-            currentLimitSide = ocrEngine.limitSideLen;
+        sliderDetThresh.value = currentParams.detDbThresh;
+        dispDetThresh.textContent = currentParams.detDbThresh;
 
-            sliderDetThresh.value = ocrEngine.detDbThresh;
-            dispDetThresh.textContent = ocrEngine.detDbThresh;
+        sliderBoxThresh.value = currentParams.detDbBoxThresh;
+        dispBoxThresh.textContent = currentParams.detDbBoxThresh;
 
-            sliderBoxThresh.value = ocrEngine.detDbBoxThresh;
-            dispBoxThresh.textContent = ocrEngine.detDbBoxThresh;
+        sliderRecThresh.value = currentParams.recScoreThresh;
+        dispRecThresh.textContent = currentParams.recScoreThresh;
 
-            sliderRecThresh.value = ocrEngine.recScoreThresh;
-            dispRecThresh.textContent = ocrEngine.recScoreThresh;
-
-            updatePreview();
-        };
-        img.src = imageDataUrl;
+        requestPreviewUpdate();
     }
 
     function hide() {
         section.classList.add('hidden');
-        document.querySelector('.camera-container').classList.remove('hidden'); // Show camera view back
+        const camContainer = document.querySelector('.camera-container');
+        if (camContainer) camContainer.classList.remove('hidden');
     }
 
-    function updatePreview() {
-        if (!currentImage) return;
+    // Debounced Preview Update
+    let debounceTimer = null;
+    function requestPreviewUpdate() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            updatePreview();
+        }, 300); // 300ms delay
+    }
 
-        // 1. Get preprocessed image from Engine
-        const tempCanvas = ocrEngine.preprocessImage(currentImage);
+    async function updatePreview() {
+        if (!currentImageDataUrl) return;
 
-        // 2. Setup Display Canvas
-        processedCanvas.width = tempCanvas.width;
-        processedCanvas.height = tempCanvas.height;
-        const ctx = processedCanvas.getContext('2d');
+        try {
+            // Workerへ前処理リクエスト
+            const imageBitmap = await getPreprocessedPreview(currentImageDataUrl, currentParams);
 
-        // 3. Draw Image
-        ctx.drawImage(tempCanvas, 0, 0);
+            // Canvasに描画
+            processedCanvas.width = imageBitmap.width;
+            processedCanvas.height = imageBitmap.height;
+            const ctx = processedCanvas.getContext('2d');
+            ctx.drawImage(imageBitmap, 0, 0);
 
-        // 4. Draw Limit Frame if needed
-        drawLimitFrame(ctx, tempCanvas.width, tempCanvas.height);
+            // Close bitmap to free memory
+            imageBitmap.close();
+
+            drawLimitFrame(ctx, processedCanvas.width, processedCanvas.height);
+        } catch (e) {
+            console.error('Preview Error:', e);
+        }
     }
 
     function drawLimitFrame(ctx, w, h) {
-        // limitSideLen logic matches ocrEngine logic:
-        // if max(w,h) > limit, it will be resized.
-        // We want to show what PART of the image fits or how big the limit is relative to the current image.
-        // Wait, ocrEngine logic works by resizing the WHOLE image to fit WITHIN the limit.
-        // So drawing a frame of size `limit` on the image helps visualize if the image is LARGER than the limit.
-        // If image is larger than limit, it will be downscaled.
-        // So we should draw a rectangle of size limit x limit (or aspect ratio respected) to show the scale?
-        // Actually, if w > limit or h > limit, it will be downscaled.
-        // A simple way is: if max(w,h) > limit, draw a Red Border around the edge indicating "Downscaling will occur".
-        // Or, more intuitively: Draw a dashed box of size `limit` centered on the image? 
-        // If the box is smaller than the image, it implies downscaling.
-
-        const limit = currentLimitSide;
+        const limit = currentParams.limitSideLen;
         const isDownscaling = Math.max(w, h) > limit;
 
+        // Preview canvas is ALREADY resized?
+        // Note: preprocessImage function in OnnxOCR applies resizing IF it was part of detection preprocessing, 
+        // BUT preprocessImage method specifically handles Contrast/Sharpening.
+        // It does NOT resize to limitSideLen. Resizing happens in preprocessDet.
+        // So the image displayed here is the full resolution (or original) with contrast applied.
+
         if (isDownscaling) {
-            // Draw a red border to indicate downscaling
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 10;
             ctx.strokeRect(0, 0, w, h);
 
-            // Also text indicating resizing
             ctx.fillStyle = 'red';
             ctx.font = 'bold 40px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(`Resize to ${limit}px`, w / 2, 50);
         } else {
-            // Draw a green border to indicate OK
             ctx.strokeStyle = 'lime';
             ctx.lineWidth = 5;
             ctx.strokeRect(0, 0, w, h);

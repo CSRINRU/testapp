@@ -1,6 +1,7 @@
-import { AppState } from './state.js';
+import { store } from './store.js';
 import { DEFAULT_DICTIONARY } from './constants.js';
 import { getFromIndexedDB, saveToIndexedDB } from './db.js';
+import { AIClassifier } from './ai_classifier.js';
 
 /**
  * カテゴリ辞書の初期化
@@ -10,9 +11,9 @@ export async function initCategoryDictionary() {
     const savedDictionary = await getFromIndexedDB('settings', 'categoryDictionary');
 
     if (savedDictionary) {
-        AppState.categoryDictionary = savedDictionary;
+        store.setCategoryDictionary(savedDictionary);
     } else {
-        AppState.categoryDictionary = DEFAULT_DICTIONARY;
+        store.setCategoryDictionary(DEFAULT_DICTIONARY);
         await saveToIndexedDB('settings', 'categoryDictionary', DEFAULT_DICTIONARY);
     }
 
@@ -25,7 +26,6 @@ export async function initCategoryDictionary() {
  * @param {string[]} items 
  * @returns {string} カテゴリ名
  */
-import { AIClassifier } from './ai_classifier.js';
 
 const aiClassifier = new AIClassifier();
 
@@ -45,7 +45,9 @@ export async function classifyCategory(items) {
     const scores = {};
     let dictionaryHit = false;
 
-    for (const [category, keywords] of Object.entries(AppState.categoryDictionary)) {
+    const dictionary = store.state.categoryDictionary;
+
+    for (const [category, keywords] of Object.entries(dictionary)) {
         let score = 0;
         for (const keyword of keywords) {
             if (allItems.includes(keyword)) {
@@ -94,8 +96,9 @@ export async function updateDictionaryDisplay() {
     if (!container) return;
 
     container.innerHTML = '';
+    const dictionary = store.state.categoryDictionary;
 
-    for (const [category, keywords] of Object.entries(AppState.categoryDictionary)) {
+    for (const [category, keywords] of Object.entries(dictionary)) {
         // カテゴリヘッダー
         const categoryHeader = document.createElement('div');
         categoryHeader.className = 'dictionary-category';
@@ -141,23 +144,37 @@ export async function addKeywordToDictionary() {
         return;
     }
 
+    const dictionary = store.state.categoryDictionary;
+
     // 既存のキーワードかチェック
-    for (const cat of Object.keys(AppState.categoryDictionary)) {
-        if (AppState.categoryDictionary[cat].includes(keyword)) {
+    for (const cat of Object.keys(dictionary)) {
+        if (dictionary[cat].includes(keyword)) {
             alert('このキーワードは既に登録されています');
             return;
         }
     }
 
-    // 辞書に追加
-    if (!AppState.categoryDictionary[category]) {
-        AppState.categoryDictionary[category] = [];
+    // 辞書に追加 (Create a copy/clone to avoid direct mutation if strict, but here we modify and set back)
+    // Deep clone or shallow clone?
+    // categoryDictionary is Object { category: [keywords...] }
+    // Shallow copy of object is enough if we replace the array? 
+    // Or just modify and call setCategoryDictionary to trigger notify?
+    // Store.setCategoryDictionary replaces the reference.
+
+    // For proper reactivity, we should clone.
+    const newDictionary = JSON.parse(JSON.stringify(dictionary)); // Simple deep clone
+
+    if (!newDictionary[category]) {
+        newDictionary[category] = [];
     }
 
-    AppState.categoryDictionary[category].push(keyword);
+    newDictionary[category].push(keyword);
+
+    // Update Store
+    store.setCategoryDictionary(newDictionary);
 
     // IndexedDBに保存
-    await saveToIndexedDB('settings', 'categoryDictionary', AppState.categoryDictionary);
+    await saveToIndexedDB('settings', 'categoryDictionary', newDictionary);
 
     // 表示を更新
     updateDictionaryDisplay();
@@ -177,17 +194,23 @@ export async function deleteKeywordFromDictionary(keyword) {
         return;
     }
 
+    const dictionary = store.state.categoryDictionary;
+    const newDictionary = JSON.parse(JSON.stringify(dictionary)); // Simple deep clone
+
     // すべてのカテゴリからキーワードを削除
-    for (const category of Object.keys(AppState.categoryDictionary)) {
-        const index = AppState.categoryDictionary[category].indexOf(keyword);
+    for (const category of Object.keys(newDictionary)) {
+        const index = newDictionary[category].indexOf(keyword);
         if (index !== -1) {
-            AppState.categoryDictionary[category].splice(index, 1);
+            newDictionary[category].splice(index, 1);
             break;
         }
     }
 
+    // Update Store
+    store.setCategoryDictionary(newDictionary);
+
     // IndexedDBに保存
-    await saveToIndexedDB('settings', 'categoryDictionary', AppState.categoryDictionary);
+    await saveToIndexedDB('settings', 'categoryDictionary', newDictionary);
 
     // 表示を更新
     updateDictionaryDisplay();

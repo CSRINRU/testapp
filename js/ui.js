@@ -1,10 +1,28 @@
-import { AppState } from './state.js';
+import { store } from './store.js';
 import { formatDate } from './utils.js';
-import { saveToIndexedDB, saveReceipt, deleteReceipt } from './db.js';
+import { saveToIndexedDB, saveReceipt, deleteReceipt, clearAllReceipts, loadReceipts } from './db.js';
 import { setupCamera, capturePhoto, handleImageUpload, updateModalImage } from './camera.js';
 import { updateAnalysis } from './analysis.js';
 import { geminiService } from './gemini.js';
 import { MAJOR_CATEGORIES, MINOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS, MAJOR_CATEGORY_DISPLAY_NAMES } from './constants.js';
+
+// 確認モーダル用コールバック
+let confirmCallback = null;
+
+/**
+ * レシートデータを再読み込みしてストアとUIを更新
+ */
+async function reloadReceipts() {
+    try {
+        const receipts = await loadReceipts();
+        store.setReceipts(receipts);
+        updateReceiptList();
+        updateDataCount();
+        updateAnalysis();
+    } catch (error) {
+        console.error('Failed to reload receipts:', error);
+    }
+}
 
 /**
  * タブ切り替えの設定
@@ -49,7 +67,7 @@ export function switchTab(tabId) {
         updateAnalysis();
     }
 
-    AppState.currentTab = tabId;
+    store.setCurrentTab(tabId);
 }
 
 /**
@@ -64,7 +82,8 @@ export function setupEventListeners() {
     const switchCameraBtn = document.getElementById('switchCameraBtn');
     if (switchCameraBtn) {
         switchCameraBtn.addEventListener('click', () => {
-            AppState.currentCamera = AppState.currentCamera === 'environment' ? 'user' : 'environment';
+            const current = store.state.currentCamera;
+            store.setCurrentCamera(current === 'environment' ? 'user' : 'environment');
             setupCamera();
         });
     }
@@ -81,7 +100,7 @@ export function setupEventListeners() {
     const changeImageBtn = document.getElementById('changeImageBtn');
     if (changeImageBtn) {
         changeImageBtn.addEventListener('click', () => {
-            AppState.isChangingModalImage = true;
+            store.setIsChangingModalImage(true);
         });
     }
 
@@ -147,9 +166,9 @@ export function setupEventListeners() {
     if (confirmOk) {
         confirmOk.addEventListener('click', () => {
             document.getElementById('confirmModal').classList.add('hidden');
-            if (AppState.confirmCallback) {
-                AppState.confirmCallback();
-                AppState.confirmCallback = null;
+            if (confirmCallback) {
+                confirmCallback();
+                confirmCallback = null;
             }
         });
     }
@@ -224,7 +243,7 @@ export function updateReceiptList() {
     const categoryFilter = categoryFilterEl ? categoryFilterEl.value : 'all';
 
     // フィルター適用
-    let filteredReceipts = [...AppState.receipts];
+    let filteredReceipts = [...store.state.receipts];
 
     // 期間フィルター
     if (periodFilter !== 'all') {
@@ -264,9 +283,6 @@ export function updateReceiptList() {
         filteredReceipts = filteredReceipts.filter(receipt => {
             // 新しい2階層構造: items内のmajor_categoryに一致するものがあるか
             if (receipt.items && Array.isArray(receipt.items)) {
-                // categoryFilterが 'food' などのIDで渡ってくると仮定
-                // もし日本語で渡ってくるなら変換が必要
-                // UIのセレクトボックスもIDにするべき
                 return receipt.items.some(item => (item.major_category) === categoryFilter);
             }
             // 古いデータ構造 (receipt.category) はフォールバックなしなら無視、あるいはID比較
@@ -393,10 +409,10 @@ export function showReceiptModal(receiptData) {
     }
 
     // 画像の設定
-    updateModalImage(AppState.currentImageData || receiptData.image);
+    updateModalImage(store.state.currentImageData || receiptData.image);
 
-    // 新規作成モード（IDがない）
-    AppState.currentReceiptId = receiptData.id || null;
+    // 新規作成モード（IDがない）かどうか
+    store.setCurrentReceiptId(receiptData.id || null);
 
     // 初回の集計表示更新
     updateItemsSummary();
@@ -415,12 +431,7 @@ function createItemRow(item = {}) {
     const row = document.createElement('div');
     row.className = 'item-row';
 
-    // カテゴリの定義 (Major Categories)
-    // IDで保持されているが、古いデータなどでテキストの場合はIDに変換を試みる（フォールバックなしでも安全策として）
     let currentMajor = item.major_category || item.category || CATEGORY_IDS.OTHER;
-    // もし日本語のままならIDに変換 (constantsに逆変換マップがあればいいが、ここでは簡易的に)
-    // 今回は新規データ前提なのでIDと仮定
-
     let currentMinor = item.minor_category || 'other_minor';
 
     // Major Category Select
@@ -497,11 +508,11 @@ function updateItemsSummary() {
  * @param {number} id 
  */
 export function editReceipt(id) {
-    const receipt = AppState.receipts.find(r => r.id === id);
+    const receipt = store.state.receipts.find(r => r.id === id);
     if (!receipt) return;
 
     // 状態を更新
-    AppState.currentImageData = receipt.image;
+    store.setCurrentImageData(receipt.image);
 
     // モーダルを表示
     showReceiptModal(receipt);
@@ -520,7 +531,6 @@ export async function saveEditedReceipt() {
     const itemRows = document.querySelectorAll('.item-row');
     const items = [];
     let calculatedTotal = 0;
-    const categoryCount = {};
 
     itemRows.forEach(row => {
         const name = row.querySelector('.item-name').value.trim();
@@ -546,13 +556,34 @@ export async function saveEditedReceipt() {
         store: editStore ? editStore.value : '',
         total: editTotal ? parseInt(editTotal.value) || 0 : 0,
         items: items,
-        image: null, // 画像は保存しない
+        image: null, // 画像は保存しない(DBにはblobとして保存されるか、URLか...元々imageプロパティを使っているが、ここではnullにしている意図は？元のコード準拠だが、store.currentImageDataがあればそれを使うべきでは？元コードはimage:nullとしていた。保存関数内で処理される？いや、saveReceiptはそのままputするだけ。
+        // 元のコード: image: null
+        // しかし、db.jsではput(receipt)するだけ。
+        // 画像が消える？
+        // showReceiptModalでは updateModalImage(AppState.currentImageData || receiptData.image)。
+        // 編集時に画像を変更していなければ currentImageData は null? いえ、updateModalImageでセットされる。
+        // editReceiptで store.setCurrentImageData(receipt.image) しているので、ここにはあるはず。
+        // なので、ここで store.state.currentImageData を使うべき。
+        // 元のコードのバグ? あるいは意図的?
+        // 元のコード:
+        // AppState.currentImageData = receipt.image;
+        // ...
+        // save: image: null
+        // これだと画像消えそうだが...。
+        // あ、編集画面以外(Cameraなど)からは imageがDataURLで渡ってくる。
+        // 既存編集時も、Store内のImageDataを使うべき。
         memo: editMemo ? editMemo.value : ''
     };
 
+    // 画像データの補完
+    if (store.state.currentImageData) {
+        receipt.image = store.state.currentImageData;
+    }
+
     // IDが設定されている場合は既存レシートを更新
-    if (AppState.currentReceiptId) {
-        receipt.id = AppState.currentReceiptId;
+    const currentId = store.state.currentReceiptId;
+    if (currentId) {
+        receipt.id = currentId;
     }
 
     // バリデーション
@@ -562,7 +593,10 @@ export async function saveEditedReceipt() {
     }
 
     // 保存
-    await saveReceipt(receipt, updateReceiptList, updateDataCount, updateAnalysis);
+    await saveReceipt(receipt);
+
+    // データリロード
+    await reloadReceipts();
 
     // モーダルを閉じる
     const modal = document.getElementById('receiptModal');
@@ -577,10 +611,11 @@ export async function saveEditedReceipt() {
  */
 export function confirmDeleteReceipt(id = null) {
     if (id !== null && typeof id === 'number') {
-        AppState.currentReceiptId = id;
+        store.setCurrentReceiptId(id);
     }
 
-    const receipt = AppState.receipts.find(r => r.id === AppState.currentReceiptId);
+    const currentId = store.state.currentReceiptId;
+    const receipt = store.state.receipts.find(r => r.id === currentId);
 
     if (!receipt) {
         // モーダルを閉じる
@@ -589,8 +624,10 @@ export function confirmDeleteReceipt(id = null) {
         return;
     }
 
-    AppState.confirmCallback = async () => {
-        await deleteReceipt(AppState.currentReceiptId, updateReceiptList, updateDataCount, updateAnalysis);
+    confirmCallback = async () => {
+        await deleteReceipt(currentId);
+        await reloadReceipts();
+
         const modal = document.getElementById('receiptModal');
         if (modal) modal.classList.add('hidden');
         alert('レシートを削除しました');
@@ -628,8 +665,8 @@ export function handlePeriodChange() {
  */
 export function exportData() {
     const data = {
-        receipts: AppState.receipts,
-        categoryDictionary: AppState.categoryDictionary,
+        receipts: store.state.receipts,
+        categoryDictionary: store.state.categoryDictionary || {}, // StoreにDictionaryあるか確認
         exportDate: new Date().toISOString()
     };
 
@@ -669,19 +706,23 @@ export async function importData(event) {
             }
 
             // 既存のデータをクリア
-            const transaction = AppState.db.transaction(['receipts'], 'readwrite');
-            const store = transaction.objectStore('receipts');
-            const clearRequest = store.clear();
+            await clearAllReceipts();
 
-            clearRequest.onsuccess = async () => {
-                // 新しいデータを保存
-                for (const receipt of data.receipts) {
-                    await saveReceipt(receipt, updateReceiptList, updateDataCount, updateAnalysis);
-                }
+            // 新しいデータを保存
+            for (const receipt of data.receipts) {
+                // saveReceiptはコールバック不要のバージョンを使用
+                // しかしUI更新は最後にまとめて行いたい
+                // await saveReceipt(receipt, null, null, null); 
+                // db.js defines saveReceipt(receipt, ...) ignoring callbacks now in my previous update? 
+                // Checks db.js: Yes, I commented out usage of callbacks but kept parameters.
+                await saveReceipt(receipt);
+            }
 
-                alert('データのインポートが完了しました');
-                event.target.value = ''; // 入力値をリセット
-            };
+            // UI更新
+            await reloadReceipts();
+
+            alert('データのインポートが完了しました');
+            event.target.value = ''; // 入力値をリセット
 
         } catch (error) {
             console.error('データのインポートに失敗しました:', error);
@@ -696,17 +737,12 @@ export async function importData(event) {
  * 全データ削除の確認
  */
 export function confirmClearData() {
-    AppState.confirmCallback = async () => {
+    confirmCallback = async () => {
         // レシートデータをクリア
-        const transaction = AppState.db.transaction(['receipts'], 'readwrite');
-        const store = transaction.objectStore('receipts');
-        store.clear();
+        await clearAllReceipts();
 
         // アプリ状態をリセット
-        AppState.receipts = [];
-        updateReceiptList();
-        updateAnalysis();
-        updateDataCount();
+        await reloadReceipts(); // This will fetch empty list and update store
 
         alert('全データを削除しました');
     };
@@ -726,6 +762,6 @@ export function confirmClearData() {
 export function updateDataCount() {
     const dataCountEl = document.getElementById('dataCount');
     if (dataCountEl) {
-        dataCountEl.textContent = AppState.receipts.length;
+        dataCountEl.textContent = store.state.receipts.length;
     }
 }
