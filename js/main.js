@@ -1,7 +1,7 @@
 import { AppState } from './state.js';
 import { initDatabase, loadReceipts } from './db.js';
 import { setupCamera } from './camera.js';
-import { initCategoryDictionary } from './dictionary.js';
+
 import { updateAnalysis } from './analysis.js';
 import { setupTabNavigation, setupEventListeners, updateReceiptList, updateDataCount, showReceiptModal } from './ui.js';
 
@@ -15,9 +15,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // データベースの初期化とデータ読み込み
     await initDatabase();
-
-    // カテゴリ辞書の初期化
-    await initCategoryDictionary();
 
     // データの読み込み
     await loadReceipts(updateReceiptList, updateDataCount);

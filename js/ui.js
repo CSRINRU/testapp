@@ -2,10 +2,9 @@ import { AppState } from './state.js';
 import { formatDate } from './utils.js';
 import { saveToIndexedDB, saveReceipt, deleteReceipt } from './db.js';
 import { setupCamera, capturePhoto, handleImageUpload, updateModalImage } from './camera.js';
-import { addKeywordToDictionary, updateDictionaryDisplay } from './dictionary.js';
 import { updateAnalysis } from './analysis.js';
 import { geminiService } from './gemini.js';
-import { classifyCategory } from './dictionary.js';
+import { MAJOR_CATEGORIES } from './constants.js';
 
 /**
  * タブ切り替えの設定
@@ -106,10 +105,6 @@ export function setupEventListeners() {
     // 分析期間変更
     const analysisPeriod = document.getElementById('analysisPeriod');
     if (analysisPeriod) analysisPeriod.addEventListener('change', updateAnalysis);
-
-    // キーワード追加
-    const addKeywordBtn = document.getElementById('addKeywordBtn');
-    if (addKeywordBtn) addKeywordBtn.addEventListener('click', addKeywordToDictionary);
 
     // データ管理
     const exportDataBtn = document.getElementById('exportDataBtn');
@@ -264,9 +259,14 @@ export function updateReceiptList() {
         }
     }
 
-    // カテゴリフィルター
+    // カテゴリフィルター (レシート内のアイテムのいずれかが一致するか、またはレシート自体にカテゴリがある場合)
     if (categoryFilter !== 'all') {
         filteredReceipts = filteredReceipts.filter(receipt => {
+            // 新しい2階層構造: items内のmajor_categoryに一致するものがあるか
+            if (receipt.items && Array.isArray(receipt.items)) {
+                return receipt.items.some(item => (item.major_category || item.category) === categoryFilter);
+            }
+            // フォールバック: 旧データ構造対応 (receipt.categoryがある場合)
             return receipt.category === categoryFilter;
         });
     }
@@ -385,7 +385,7 @@ export function showReceiptModal(receiptData) {
             });
         } else {
             // アイテムがない場合は空行を1つ追加
-            itemsContainer.appendChild(createItemRow({ name: '', count: 1, amount: 0, category: 'その他' }));
+            itemsContainer.appendChild(createItemRow({ name: '', count: 1, amount: 0, major_category: 'その他', minor_category: '' }));
         }
     }
 
@@ -412,16 +412,22 @@ function createItemRow(item = {}) {
     const row = document.createElement('div');
     row.className = 'item-row';
 
-    // カテゴリの定義
-    const categories = ['食品', '雑貨', '日用品', '外食', 'その他'];
-    const currentCategory = item.category || 'その他';
+    // カテゴリの定義 (Major Categories)
+    const currentMajor = item.major_category || item.category || 'その他'; // item.category is fallback
+    const currentMinor = item.minor_category || '';
+
+    // Major Category Select
+    const majorSelectHtml = `
+        <select class="item-major-category">
+            ${MAJOR_CATEGORIES.map(cat => `<option value="${cat}" ${cat === currentMajor ? 'selected' : ''}>${cat}</option>`).join('')}
+        </select>
+    `;
 
     row.innerHTML = `
-        <input type="text" class="item-name" value="${item.name || ''}" placeholder="商品名">
-        <input type="number" class="item-amount" value="${item.amount || 0}" placeholder="価格">
-        <select class="item-category">
-            ${categories.map(cat => `<option value="${cat}" ${cat === currentCategory ? 'selected' : ''}>${cat}</option>`).join('')}
-        </select>
+        <input type="text" class="item-name" value="${item.name || ''}" placeholder="商品名" style="flex: 2;">
+        <input type="number" class="item-amount" value="${item.amount || 0}" placeholder="価格" style="flex: 1;">
+        ${majorSelectHtml}
+        <input type="text" class="item-minor-category" value="${currentMinor}" placeholder="小カテゴリ" style="flex: 1;">
         <button type="button" class="btn btn-danger btn-small delete-item-btn">
             <i class="fas fa-times"></i>
         </button>
@@ -501,18 +507,19 @@ export async function saveEditedReceipt() {
     itemRows.forEach(row => {
         const name = row.querySelector('.item-name').value.trim();
         const amount = parseInt(row.querySelector('.item-amount').value) || 0;
-        const category = row.querySelector('.item-category').value;
+        const major_category = row.querySelector('.item-major-category').value;
+        const minor_category = row.querySelector('.item-minor-category').value.trim() || 'ー';
         const count = parseInt(row.querySelector('.item-count').value) || 1;
 
         if (name) {
             items.push({
                 name,
                 amount,
-                category,
+                major_category,
+                minor_category,
                 count
             });
             calculatedTotal += amount;
-            categoryCount[category] = (categoryCount[category] || 0) + 1;
         }
     });
 
@@ -652,13 +659,6 @@ export async function importData(event) {
                 // 新しいデータを保存
                 for (const receipt of data.receipts) {
                     await saveReceipt(receipt, updateReceiptList, updateDataCount, updateAnalysis);
-                }
-
-                // カテゴリ辞書をインポート
-                if (data.categoryDictionary) {
-                    AppState.categoryDictionary = data.categoryDictionary;
-                    await saveToIndexedDB('settings', 'categoryDictionary', data.categoryDictionary);
-                    updateDictionaryDisplay();
                 }
 
                 alert('データのインポートが完了しました');

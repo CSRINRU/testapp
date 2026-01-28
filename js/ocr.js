@@ -1,5 +1,5 @@
 import { AppState } from './state.js';
-import { classifyCategory } from './dictionary.js';
+
 import { OnnxOCR } from './onnx_ocr.js';
 import { setupPreprocessingUI } from './preprocessing_ui.js';
 import { geminiService } from './gemini.js';
@@ -101,22 +101,21 @@ export async function processImage(imageData, showReceiptModal) {
                     receiptData = extractReceiptData(text);
                 }
 
-                // カテゴリの自動分類 (アイテムごとにローカルNLP + 辞書)
+                // カテゴリの整理 (Geminiが返したものを確認、なければデフォルト)
                 if (receiptData.items && receiptData.items.length > 0) {
-                    if (progressText) progressText.textContent = 'アイテムを分類中...';
+                    if (progressText) progressText.textContent = 'データ整理中...';
 
-                    // アイテムごとの分類を順次実行（並列処理によるメモリ/WASMエラー回避）
                     for (let i = 0; i < receiptData.items.length; i++) {
                         let item = receiptData.items[i];
-                        // オブジェクトでない場合はオブジェクト化
+                        // オブジェクトでない場合はオブジェクト化 (簡易解析の場合など)
                         if (typeof item === 'string') {
                             item = { name: item, count: 1, amount: 0 };
-                            receiptData.items[i] = item; // 配列要素を更新
+                            receiptData.items[i] = item;
                         }
 
-                        // カテゴリ分類 (辞書 -> AI)
-                        if (progressText) progressText.textContent = `アイテムを分類中... (${i + 1}/${receiptData.items.length})`;
-                        item.category = await classifyCategory([item.name]);
+                        // カテゴリのデフォルト設定
+                        if (!item.major_category) item.major_category = 'その他';
+                        if (!item.minor_category) item.minor_category = 'ー';
                     }
                 }
 

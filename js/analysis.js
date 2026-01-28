@@ -62,12 +62,12 @@ export function updateAnalysis() {
     const receiptCount = filteredReceipts.length;
     const avgAmount = receiptCount > 0 ? Math.round(totalAmount / receiptCount) : 0;
 
-    // 最多カテゴリ (アイテムベースで集計)
+    // 最多カテゴリ (アイテムベースで集計: 大カテゴリを使用)
     const categoryCount = {};
     filteredReceipts.forEach(receipt => {
         if (receipt.items && receipt.items.length > 0) {
             receipt.items.forEach(item => {
-                const cat = item.category || 'その他';
+                const cat = item.major_category || item.category || 'その他';
                 categoryCount[cat] = (categoryCount[cat] || 0) + 1;
             });
         }
@@ -152,7 +152,7 @@ export function drawCategoryChart(receipts) {
         if (receipt.items && receipt.items.length > 0) {
             receipt.items.forEach(item => {
                 const amount = item.amount || 0; // 金額がない場合は0
-                const cat = item.category || 'その他';
+                const cat = item.major_category || item.category || 'その他';
                 categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
                 itemsTotal += amount;
             });

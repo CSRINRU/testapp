@@ -1,3 +1,5 @@
+import { MAJOR_CATEGORIES } from './constants.js';
+
 /**
  * GeminiService: Gemini APIを使用してレシートテキストを構造化するサービス
  */
@@ -33,6 +35,8 @@ export class GeminiService {
             throw new Error('Gemini APIキーが設定されていません。設定画面でキーを入力してください。');
         }
 
+        const validCategories = MAJOR_CATEGORIES.join(', ');
+
         const prompt = `
 以下のOCRで読み取ったレシートのテキストから情報を抽出・修正してJSON形式で出力してください。
 誤字脱字がある場合は文脈から判断して修正してください。
@@ -46,10 +50,15 @@ export class GeminiService {
     {
       "name": "商品名",
       "count": 数値（個数、不明な場合は1）,
-      "amount": 数値（商品の単価×個数の合計金額）
+      "amount": 数値（商品の単価×個数の合計金額）,
+      "major_category": "大カテゴリ（後述のリストから選択）",
+      "minor_category": "小カテゴリ（具体的な分類、例: 野菜、肉、文具、など）"
     }
   ]
 }
+
+大カテゴリの選択肢: ${validCategories}
+※これ以外の値を大カテゴリに入れないでください。判別不能な場合は「その他」にしてください。
 
 入力テキスト:
 ${text}
