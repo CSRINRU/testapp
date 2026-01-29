@@ -113,6 +113,12 @@ export async function processOCR(imageData, params = null) {
 export async function processImage(imageData, showReceiptModal) {
     store.setCurrentImageData(imageData);
 
+    // Make sure camera container is visible and start screen is hidden
+    const container = document.getElementById('camera-container');
+    const startScreen = document.getElementById('camera-start-screen');
+    if (container) container.classList.remove('hidden-camera');
+    if (startScreen) startScreen.classList.add('hidden');
+
     // プレビュー表示
     const preview = document.getElementById('selectedImagePreview');
     const video = document.getElementById('cameraPreview');

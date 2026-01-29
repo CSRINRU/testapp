@@ -241,28 +241,48 @@ export const PreprocessingUI = {
         const limit = this.currentParams.limitSideLen;
         const isDownscaling = Math.max(w, h) > limit;
 
+        // Calculate scaling factor to keep text size consistent on screen
+        const displayW = this.elements.processedCanvas.clientWidth || w;
+        const safeDisplayW = displayW > 0 ? displayW : w;
+        const scale = w / safeDisplayW;
+
+        // Target size in CSS pixels
+        const targetFontSize = 8;
+        const fontSize = Math.max(8, Math.round(targetFontSize * scale));
+        const padding = Math.round(3 * scale);
+        const margin = Math.round(4 * scale);
+
         // 解像度テキストの描画
         const text = `${w} x ${h}`;
-        ctx.font = 'bold 24px sans-serif';
+        ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
 
         // 背景
-        const textWidth = ctx.measureText(text).width;
+        const textMetrics = ctx.measureText(text);
+        const textWidth = textMetrics.width;
+
+        const bgX = margin;
+        const bgY = margin;
+        const bgW = textWidth + (padding * 2);
+        const bgH = fontSize * 1.4;
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, 10, textWidth + 20, 40);
+        ctx.fillRect(bgX, bgY, bgW, bgH);
 
         // 文字
         ctx.fillStyle = '#00ff00';
-        ctx.fillText(text, 20, 20);
+        ctx.fillText(text, bgX + padding, bgY + (bgH - fontSize) / 2);
+
+        // Line Width scaling
+        const baseLineWidth = isDownscaling ? 2 : 1;
+        ctx.lineWidth = Math.max(1, Math.round(baseLineWidth * scale));
 
         if (isDownscaling) {
             ctx.strokeStyle = 'red';
-            ctx.lineWidth = 10;
             ctx.strokeRect(0, 0, w, h);
         } else {
             ctx.strokeStyle = 'lime';
-            ctx.lineWidth = 5;
             ctx.strokeRect(0, 0, w, h);
         }
     }
