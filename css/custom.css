@@ -1,0 +1,31 @@
+.total-amount-group {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: 2px solid #eef2ff;
+}
+
+.total-amount-group label {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.total-amount-group input {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #4e54c8;
+    text-align: center;
+    border: none;
+    background: transparent;
+    width: 100%;
+    padding: 5px;
+}
+
+.total-amount-group input:focus {
+    outline: none;
+    border-bottom: 2px solid #4e54c8;
+}

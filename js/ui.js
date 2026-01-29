@@ -505,7 +505,7 @@ function createItemRow(item = {}) {
 
     // Minor Category Select
     const minorSelectHtml = `
-        <select class="item-minor-category" style="flex: 1;">
+        <select class="item-minor-category">
             ${Object.entries(MINOR_CATEGORY_DISPLAY_NAMES).map(([id, name]) =>
         `<option value="${id}" ${id === currentMinor ? 'selected' : ''}>${name}</option>`
     ).join('')}
@@ -513,8 +513,8 @@ function createItemRow(item = {}) {
     `;
 
     row.innerHTML = `
-        <input type="text" class="item-name" value="${item.name || ''}" placeholder="商品名" style="flex: 2;">
-        <input type="number" class="item-amount" value="${item.amount || 0}" placeholder="価格" style="flex: 1;">
+        <input type="text" class="item-name" value="${item.name || ''}" placeholder="商品名">
+        <input type="number" class="item-amount" value="${item.amount || 0}" placeholder="価格">
         ${majorSelectHtml}
         ${minorSelectHtml}
         <button type="button" class="btn btn-danger btn-small delete-item-btn">

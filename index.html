@@ -448,17 +448,20 @@
                 </div>
                 <div class="modal-body">
                     <form id="receiptForm">
-                        <div class="form-group">
+                        <div class="form-group form-group-horizontal">
                             <label for="editDate">日付:</label>
                             <input type="date" id="editDate" required>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group form-group-horizontal">
                             <label for="editStore">店舗名:</label>
                             <input type="text" id="editStore" required>
                         </div>
-                        <div class="form-group">
-                            <label for="editTotal">合計金額:</label>
-                            <input type="number" id="editTotal" required min="0">
+                        <div class="form-group total-amount-group">
+                            <label for="editTotal">合計金額</label>
+                            <div class="total-input-wrapper">
+                                <input type="number" id="editTotal" required min="0" placeholder="0">
+                                <span class="currency-unit">円</span>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>商品リスト:</label>
@@ -478,7 +481,7 @@
                                 <!-- 合計と差額がここに表示されます -->
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group hidden">
                             <label>レシート画像:</label>
                             <div class="modal-image-container">
                                 <img id="editImagePreview" src="" alt="レシート画像" class="hidden">
