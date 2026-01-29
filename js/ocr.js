@@ -2,6 +2,7 @@ import { store } from './store.js';
 import { setupPreprocessingUI } from './preprocessing_ui.js';
 import { geminiService } from './gemini.js';
 import { CATEGORY_IDS } from './constants.js';
+import { DebugUI } from './debug_ui.js';
 
 // Workerの初期化
 const worker = new Worker('js/ocr_worker.js');
@@ -101,12 +102,13 @@ export async function processOCR(imageData, params = null) {
         if (progressFill) progressFill.style.width = '50%';
 
         // 実行
-        const text = await postWorkerMessage('RECOGNIZE', { image: imageData, params });
+        // 実行
+        const result = await postWorkerMessage('RECOGNIZE', { image: imageData, params });
 
         if (progressFill) progressFill.style.width = '100%';
         if (progressText) progressText.textContent = '完了';
 
-        return text;
+        return result;
     } catch (error) {
         console.error('OCR処理中にエラーが発生しました:', error);
         throw error;
@@ -148,76 +150,89 @@ export async function processImage(imageData, showReceiptModal) {
 
             try {
                 // OCR処理
-                const text = await processOCR(imageData, currentParams);
-                console.log('OCR認識結果:', text);
+                const ocrResult = await processOCR(imageData, currentParams);
+                console.log('OCR認識結果:', ocrResult);
 
-                let receiptData;
-                const progressText = document.getElementById('progressText');
-
-                if (geminiService.hasApiKey()) {
-                    try {
-                        if (progressText) progressText.textContent = 'AIで構造化中...';
-                        receiptData = await geminiService.structureReceipt(text);
-                    } catch (e) {
-                        // ... Gemini error handling ...
-                        console.error('Gemini processing failed', e);
-                        alert('Geminiでの解析に失敗しました。簡易解析を行います。\n' + e.message);
-                        receiptData = extractReceiptData(text);
-                    }
-                } else {
-                    alert('Gemini APIキーが設定されていません。簡易解析を行います。');
-                    receiptData = extractReceiptData(text);
-                }
-
-                if (receiptData.items && receiptData.items.length > 0) {
-                    if (progressText) progressText.textContent = 'データ整理中...';
-                    for (let i = 0; i < receiptData.items.length; i++) {
-                        let item = receiptData.items[i];
-                        if (typeof item === 'string') {
-                            item = { name: item, count: 1, amount: 0 };
-                            receiptData.items[i] = item;
-                        }
-                        if (!item.major_category) item.major_category = CATEGORY_IDS.OTHER;
-                        if (!item.minor_category) item.minor_category = 'ー';
-                    }
-                }
-
-                receiptData.image = imageData;
-
-                if (typeof showReceiptModal === 'function') {
-                    showReceiptModal(receiptData);
-                }
+                // Debug UIを表示
+                DebugUI.show(imageData, ocrResult, async () => {
+                    // Continue Logic (Original logic moved here)
+                    await processGemini(ocrResult.text, imageData, progressText, showReceiptModal, processingSection);
+                });
 
             } catch (error) {
                 alert('レシートの解析に失敗しました。\n' + error.message);
-            } finally {
                 if (processingSection) processingSection.classList.add('hidden');
-
-                // Reset View
-                setTimeout(() => {
-                    const preview = document.getElementById('selectedImagePreview');
-                    const video = document.getElementById('cameraPreview');
-                    const prepSection = document.getElementById('preprocessing-section');
-                    if (prepSection) prepSection.classList.add('hidden');
-                    if (preview) preview.classList.add('hidden');
-                    if (video) video.classList.remove('hidden');
-                    if (overlay) overlay.classList.remove('hidden');
-                }, 3000);
+                // Reset View handled in finally or manual reset if needed
+                resetView();
             }
         },
         // Cancel Callback
         () => {
-            const preview = document.getElementById('selectedImagePreview');
-            const video = document.getElementById('cameraPreview');
-            if (preview) preview.classList.add('hidden');
-            if (video) video.classList.remove('hidden');
-            if (overlay) overlay.classList.remove('hidden');
+            resetView();
         },
         // Current Params Accessor (if needed, or pass defaults)
         defaultOCRParams
     );
 
     preprocessingFn.show(imageData);
+}
+
+function resetView() {
+    const preview = document.getElementById('selectedImagePreview');
+    const video = document.getElementById('cameraPreview');
+    const overlay = document.getElementById('cameraOverlay');
+    const prepSection = document.getElementById('preprocessing-section');
+    if (prepSection) prepSection.classList.add('hidden');
+    if (preview) preview.classList.add('hidden');
+    if (video) video.classList.remove('hidden');
+    if (overlay) overlay.classList.remove('hidden');
+}
+
+async function processGemini(text, imageData, progressText, showReceiptModal, processingSection) {
+    try {
+        let receiptData;
+        if (geminiService.hasApiKey()) {
+            try {
+                if (progressText) progressText.textContent = 'AIで構造化中...';
+                receiptData = await geminiService.structureReceipt(text);
+            } catch (e) {
+                console.error('Gemini processing failed', e);
+                alert('Geminiでの解析に失敗しました。簡易解析を行います。\n' + e.message);
+                receiptData = extractReceiptData(text);
+            }
+        } else {
+            alert('Gemini APIキーが設定されていません。簡易解析を行います。');
+            receiptData = extractReceiptData(text);
+        }
+
+        if (receiptData.items && receiptData.items.length > 0) {
+            if (progressText) progressText.textContent = 'データ整理中...';
+            for (let i = 0; i < receiptData.items.length; i++) {
+                let item = receiptData.items[i];
+                if (typeof item === 'string') {
+                    item = { name: item, count: 1, amount: 0 };
+                    receiptData.items[i] = item;
+                }
+                if (!item.major_category) item.major_category = CATEGORY_IDS.OTHER;
+                if (!item.minor_category) item.minor_category = 'ー';
+            }
+        }
+
+        receiptData.image = imageData;
+
+        if (typeof showReceiptModal === 'function') {
+            showReceiptModal(receiptData);
+        }
+    } catch (error) {
+        throw error;
+    } finally {
+        if (processingSection) processingSection.classList.add('hidden');
+        // No automatic reset here strictly, modal takes over. 
+        // But maybe reset camera view in background?
+        // Typically the modal covers everything so it's fine.
+        // When modal closes, it should handle state, but here we can reset inputs.
+        setTimeout(resetView, 1000);
+    }
 }
 
 /**

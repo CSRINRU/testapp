@@ -91,6 +91,10 @@ class OnnxOCR {
         const boxes = await this.detectText(image);
         console.log(`検出されたテキスト領域: ${boxes.length}個`);
 
+        // Scale factors for output
+        const scaleX = originalImage.width / image.width;
+        const scaleY = originalImage.height / image.height;
+
         // 2. テキスト認識 (Recognition)
         const results = [];
         for (const box of boxes) {
@@ -112,7 +116,14 @@ class OnnxOCR {
             const { text, score } = await this.recognizeText(cropCanvas);
 
             if (text.length > 0 && score > this.recScoreThresh) {
-                results.push({ text, score, box });
+                // Scale box back to original coordinates
+                const outBox = {
+                    x: Math.round(box.x * scaleX),
+                    y: Math.round(box.y * scaleY),
+                    w: Math.round(box.w * scaleX),
+                    h: Math.round(box.h * scaleY)
+                };
+                results.push({ text, score, box: outBox });
             }
         }
 
@@ -136,7 +147,11 @@ class OnnxOCR {
         // preprocessImageで作成したcanvasなどのGPUリソースはGC任せだが、closeできるならすべき
         // OffscreenCanvasはexplicit closeがないが、ImageBitmapはcloseすべき
 
-        return lines.join('\n');
+        return {
+            text: lines.join('\n'),
+            blocks: results,
+            lines: lines // preserving lines structure if needed hereafter
+        };
     }
 
     /**
