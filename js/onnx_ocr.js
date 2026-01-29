@@ -64,7 +64,7 @@ class OnnxOCR {
     async loadKeys() {
         // Worker環境では相対パスはWorkerスクリプトからの相対になる
         // /models/... でルート指定が無難
-        const response = await fetch('/models/ppocrv5/ppocrv5_dict.txt');
+        const response = await fetch('../models/ppocrv5/ppocrv5_dict.txt');
         const text = await response.text();
         // 行ごとに分割して配列にする
         this.keys = text.split('\n');
