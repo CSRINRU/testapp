@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-receipt-v1';
+const CACHE_NAME = 'smart-receipt-v2';
 const ASSETS = [
     './',
     './index.html',
@@ -38,6 +38,7 @@ self.addEventListener('install', (event) => {
                 console.log('Opened cache');
                 return cache.addAll(ASSETS);
             })
+            .then(() => self.skipWaiting())
     );
 });
 
@@ -52,6 +53,7 @@ self.addEventListener('activate', (event) => {
                 })
             );
         })
+            .then(() => self.clients.claim())
     );
 });
 
@@ -59,10 +61,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         (async () => {
             const cache = await caches.open(CACHE_NAME);
-            const cachedResponse = await cache.match(event.request);
+            let response = await cache.match(event.request);
 
             // 1. Determine if we need to fetch from network
-            let response = cachedResponse;
             if (!response) {
                 try {
                     response = await fetch(event.request);
@@ -77,23 +78,33 @@ self.addEventListener('fetch', (event) => {
             }
 
             // 3. Cache new network responses (except for some types)
-            if (!cachedResponse && response && response.status === 200 && response.type === 'basic' && event.request.url.startsWith('http')) {
-                cache.put(event.request, response.clone());
+            if (response && response.status === 200 && response.type === 'basic' && event.request.url.startsWith('http')) {
+                // Check if already in cache to avoid unnecessary writes, but usually put overwrites.
+                // We should only cache if we fetched from network.
+                // But simplified logic: if it's a valid response, ensure it's in cache if it's in our ASSETS list?
+                // Actually cache.put here caches EVERYTHING visited.
+                // Let's keep it simple as before.
+                // Note: we can't put a used response. verify response.body used?
+                // We clone below.
+                const responseToCache = response.clone();
+                cache.put(event.request, responseToCache);
             }
 
             // 4. Inject COOP/COEP headers for SharedArrayBuffer support (required for ONNX Runtime Web threaded)
-            // Only needed for the main document
             if (event.request.mode === 'navigate') {
                 const newHeaders = new Headers(response.headers);
                 newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
                 newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
 
-                const body = response.body;
-                // Note: response.body can be consumed only once. cloning might be needed if we cache it above.
-                // Whatever was cached above is a clone. The 'response' variable is either the original fetch response or the cached one.
-                // We can't reuse the body of a used response.
-                // Simpler approach: Create new response from blob/buffer to be safe? 
-                // Actually, if we just pass response.body to new Response, it 'consumes' it from the source response, which is fine since we are returning the new one.
+                return new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: newHeaders
+                });
+            } else {
+                // For subresources (JS, WASM, etc.), ensure CORP is set
+                const newHeaders = new Headers(response.headers);
+                newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
 
                 return new Response(response.body, {
                     status: response.status,
@@ -101,8 +112,6 @@ self.addEventListener('fetch', (event) => {
                     headers: newHeaders
                 });
             }
-
-            return response;
         })()
     );
 });

@@ -30,7 +30,14 @@ worker.onmessage = (e) => {
 };
 
 worker.onerror = (err) => {
-    console.error('Worker Error:', err);
+    console.error('Worker Error Details:', {
+        message: err.message,
+        filename: err.filename,
+        lineno: err.lineno,
+        colno: err.colno,
+        error: err.error
+    });
+    // alert('OCR Worker Error: ' + err.message); // Optional: alert user
 };
 
 // Workerへのリクエスト送信ヘルパー
