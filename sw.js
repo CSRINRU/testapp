@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-receipt-v2';
+const CACHE_NAME = 'smart-receipt-v3';
 const ASSETS = [
     './',
     './index.html',

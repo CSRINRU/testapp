@@ -5,7 +5,8 @@ import { CATEGORY_IDS, defaultOCRParams } from './constants.js';
 import { DebugUI } from './debug_ui.js';
 
 // Workerの初期化
-const worker = new Worker('js/ocr_worker.js');
+// import.meta.url を使用して確実に正しいパスを解決する
+const worker = new Worker(new URL('ocr_worker.js', import.meta.url));
 
 // メッセージID管理
 let messageIdCounter = 0;
