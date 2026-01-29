@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-receipt-v5';
+const CACHE_NAME = 'smart-receipt-v1';
 const ASSETS = [
     './',
     './index.html',
@@ -38,7 +38,6 @@ self.addEventListener('install', (event) => {
                 console.log('Opened cache');
                 return cache.addAll(ASSETS);
             })
-            .then(() => self.skipWaiting())
     );
 });
 
@@ -53,69 +52,37 @@ self.addEventListener('activate', (event) => {
                 })
             );
         })
-            .then(() => self.clients.claim())
     );
 });
 
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        (async () => {
-            const cache = await caches.open(CACHE_NAME);
-            let response = await cache.match(event.request);
-
-            // 1. Determine if we need to fetch from network
-            if (!response) {
-                try {
-                    response = await fetch(event.request);
-                } catch (e) {
-                    console.error('Fetch failed:', e);
+        caches.match(event.request)
+            .then((response) => {
+                // Cache hit - return response
+                if (response) {
+                    return response;
                 }
-            }
+                return fetch(event.request)
+                    .then((response) => {
+                        // Check if we received a valid response
+                        if (!response || response.status !== 200 || response.type !== 'basic') {
+                            return response;
+                        }
 
-            // 2. If still no response (e.g. offline and no cache), try fallback (optional, skipping here)
-            if (!response) {
-                return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-            }
+                        // Clone the response
+                        const responseToCache = response.clone();
 
-            // 3. Cache new network responses (except for some types)
-            if (response && response.status === 200 && response.type === 'basic' && event.request.url.startsWith('http')) {
-                // Check if already in cache to avoid unnecessary writes, but usually put overwrites.
-                // We should only cache if we fetched from network.
-                // But simplified logic: if it's a valid response, ensure it's in cache if it's in our ASSETS list?
-                // Actually cache.put here caches EVERYTHING visited.
-                // Let's keep it simple as before.
-                // Note: we can't put a used response. verify response.body used?
-                // We clone below.
-                const responseToCache = response.clone();
-                cache.put(event.request, responseToCache);
-            }
+                        caches.open(CACHE_NAME)
+                            .then((cache) => {
+                                // Don't cache if not http/https (e.g. chrome-extension scheme)
+                                if (event.request.url.startsWith('http')) {
+                                    cache.put(event.request, responseToCache);
+                                }
+                            });
 
-            // 4. Inject COOP/COEP headers for SharedArrayBuffer support (required for ONNX Runtime Web threaded)
-            // We can only recreate the response if it has a valid status (not opaque/0)
-            if (response && response.status >= 200 && response.status < 600) {
-                if (event.request.mode === 'navigate') {
-                    const newHeaders = new Headers(response.headers);
-                    newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
-                    newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
-
-                    return new Response(response.body, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: newHeaders
+                        return response;
                     });
-                } else {
-                    const newHeaders = new Headers(response.headers);
-                    newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
-
-                    return new Response(response.body, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: newHeaders
-                    });
-                }
-            }
-
-            return response;
-        })()
+            })
     );
 });

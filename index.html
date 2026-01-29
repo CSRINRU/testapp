@@ -511,26 +511,6 @@
             navigator.serviceWorker.register('./sw.js')
                 .then(registration => {
                     console.log('ServiceWorker registration successful with scope: ', registration.scope);
-
-                    // COOP/COEP headers check for SharedArrayBuffer support
-                    // If not isolated (no headers) and SW is ready, or if getting controlled for first time, reload.
-                    // We wait for the SW to be ready before reloading to ensure it can actually intercept the next request.
-                    if (!window.crossOriginIsolated) {
-                        console.log('Reloading to enable Cross-Origin Isolation...');
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'activated') {
-                                    window.location.reload();
-                                }
-                            });
-                        });
-
-                        // If already active but not isolated (e.g. first load instant claim), reload
-                        if (registration.active) {
-                            window.location.reload();
-                        }
-                    }
                 }, err => {
                     console.log('ServiceWorker registration failed: ', err);
                 });

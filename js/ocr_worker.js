@@ -1,12 +1,6 @@
-console.log('OCR Worker Starting...');
-try {
-    importScripts('../lib/ort.all.min.js');
-    importScripts('./onnx_ocr.js');
-    console.log('OCR Worker Dependencies Loaded');
-} catch (e) {
-    console.error('OCR Worker Dependency Load Failed:', e);
-    throw e;
-}
+// OCR Worker
+importScripts('../lib/ort.all.min.js');
+importScripts('./onnx_ocr.js');
 
 const ocr = new self.OnnxOCR();
 
