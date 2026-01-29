@@ -64,12 +64,12 @@ export function updateAnalysis() {
     const receiptCount = filteredReceipts.length;
     const avgAmount = receiptCount > 0 ? Math.round(totalAmount / receiptCount) : 0;
 
-    // 最多カテゴリ (アイテムベースで集計: 大カテゴリを使用)
+    // 最多カテゴリ集計 (大カテゴリ)
     const categoryCount = {};
     filteredReceipts.forEach(receipt => {
         if (receipt.items && receipt.items.length > 0) {
             receipt.items.forEach(item => {
-                const cat = item.major_category || item.category || 'その他';
+                const cat = item.major_category || 'その他';
                 categoryCount[cat] = (categoryCount[cat] || 0) + 1;
             });
         }
@@ -154,13 +154,13 @@ export function drawCategoryChart(receipts) {
         if (receipt.items && receipt.items.length > 0) {
             receipt.items.forEach(item => {
                 const amount = item.amount || 0; // 金額がない場合は0
-                const cat = item.major_category || item.category || 'その他';
+                const cat = item.major_category || 'その他';
                 categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
                 itemsTotal += amount;
             });
         }
 
-        // 差額を「不明」として計上 (レシート合計 > アイテム合計の場合のみ)
+        // 差額を「不明」として計上
         if (receipt.total > itemsTotal) {
             const diff = receipt.total - itemsTotal;
             categoryTotals['不明'] = (categoryTotals['不明'] || 0) + diff;
@@ -182,7 +182,7 @@ export function drawCategoryChart(receipts) {
 
     if (amounts.length === 0) return;
 
-    // グラフの描画（シンプルな円グラフ）
+    // 円グラフ描画
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const radius = Math.min(centerX, centerY) - 10;
@@ -339,8 +339,7 @@ export function updateTopProducts(receipts) {
             // 簡易的に商品名をキーにする
             const cleanItem = String(name).trim().substring(0, 30);
             if (cleanItem) {
-                // 個数分を加算 (countが取得できればその分、なければ1)
-                // 単純な頻度分析なら +1 だが、個数情報があるので加味する
+                // 個数を加算
                 productCount[cleanItem] = (productCount[cleanItem] || 0) + count;
             }
         });

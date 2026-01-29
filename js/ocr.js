@@ -68,8 +68,7 @@ async function initOCR() {
  */
 export async function getPreprocessedPreview(imageData, params) {
     if (!isWorkerInitialized) await initOCR();
-    // Base64からBlobを作成して転送してもよいが、Worker側でfetchもできる
-    // 効率のため、ここではBase64文字列を渡す (WorkerのloadImageが対応済み)
+    // 効率化のためBase64を直接Workerへ送信
     return await postWorkerMessage('PREPROCESS', { image: imageData, params });
 }
 
@@ -130,7 +129,7 @@ export async function processImage(imageData, showReceiptModal) {
     if (processingSection) processingSection.classList.add('hidden');
 
     // 前処理UIセットアップ
-    // currentParamsを保持して解析時に渡す
+    // 解析用パラメータの保持
     let currentParams = { ...defaultOCRParams };
 
     PreprocessingUI.show(
@@ -151,12 +150,12 @@ export async function processImage(imageData, showReceiptModal) {
                     console.table(ocrResult.blocks.map(b => {
                         let dimStr = '';
                         if (Array.isArray(b.box)) {
-                            // Calculate center or just show first point
+                            // 中心点または始点を表示
                             dimStr = `(${b.box[0].x},${b.box[0].y})...`;
                         } else {
                             dimStr = `${b.box.x},${b.box.y},${b.box.w},${b.box.h}`;
                         }
-                        return { // Return object for table
+                        return { // テーブル表示用オブジェクト
                             text: b.text,
                             score: (b.score * 100).toFixed(1) + '%',
                             box: dimStr
@@ -169,22 +168,22 @@ export async function processImage(imageData, showReceiptModal) {
 
                 // Debug UIを表示
                 DebugUI.show(imageData, ocrResult, async () => {
-                    // Continue Logic (Original logic moved here)
+                    // 処理継続
                     await processGemini(ocrResult.text, imageData, progressText, showReceiptModal, processingSection);
                 });
 
             } catch (error) {
                 alert('レシートの解析に失敗しました。\n' + error.message);
                 if (processingSection) processingSection.classList.add('hidden');
-                // Reset View handled in finally or manual reset if needed
+                // ビューのリセット
                 resetView();
             }
         },
-        // Cancel Callback
+        // キャンセル時のコールバック
         () => {
             resetView();
         },
-        // Current Params (optional, if we want to reset or keep)
+        // 現在のパラメータ
         defaultOCRParams
     );
 }
@@ -239,10 +238,7 @@ async function processGemini(text, imageData, progressText, showReceiptModal, pr
         throw error;
     } finally {
         if (processingSection) processingSection.classList.add('hidden');
-        // No automatic reset here strictly, modal takes over. 
-        // But maybe reset camera view in background?
-        // Typically the modal covers everything so it's fine.
-        // When modal closes, it should handle state, but here we can reset inputs.
+        // モーダル表示のため自動リセットは遅延実行
         setTimeout(resetView, 1000);
     }
 }

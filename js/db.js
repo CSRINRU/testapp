@@ -115,6 +115,8 @@ export async function loadReceipts(updateReceiptList, updateDataCount) {
             // I'll make it return the receipts, and main.js will set them to store.
 
             const receipts = request.result || [];
+            // 画像データはメモリに展開しない (廃止対応)
+            receipts.forEach(r => r.image = null);
 
             // Returning receipts so caller can update store
             resolve(receipts);
@@ -135,7 +137,9 @@ export async function saveReceipt(receipt, updateReceiptList, updateDataCount, u
         const transaction = db.transaction(['receipts'], 'readwrite');
         const store = transaction.objectStore('receipts');
 
-        const request = store.put(receipt);
+        // 画像データの保存は廃止
+        const receiptToSave = { ...receipt, image: null };
+        const request = store.put(receiptToSave);
 
         request.onerror = () => reject(request.error);
         request.onsuccess = async () => {

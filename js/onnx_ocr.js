@@ -18,11 +18,11 @@ class OnnxOCR {
         this.recScoreThresh = 0.6; // 認識信頼度の閾値
         this.paddingRatio = 0.1; // パディング率
 
-        // Debug params
+        // デバッグ用パラメータ
         this.preprocessContrast = 1.3;
         this.enableContrast = true;     // コントラスト強調のOn/Off
         this.enableSharpening = true;   // シャープニングのOn/Off
-        this.lastPreprocessedImage = null; // デバッグ用: 前処理後の画像 (WorkerではDataURL化はコスト高いのでnullか必要時のみ)
+        this.lastPreprocessedImage = null; // デバッグ用: 前処理後の画像
     }
 
     /**
@@ -32,8 +32,7 @@ class OnnxOCR {
         if (this.isInitialized) return;
 
         try {
-            // WASMパスの設定 (lib/フォルダにあると仮定)
-            // サーバーのルートからの絶対パスを指定して曖昧さを排除する
+            // WASMパス設定
             ort.env.wasm.wasmPaths = '/lib/';
 
             // 文字コード表の読み込み
@@ -92,22 +91,22 @@ class OnnxOCR {
         const boxes = await this.detectText(image);
         console.log(`検出されたテキスト領域: ${boxes.length}個`);
 
-        // Scale factors for output
+        // 出力用スケール計算
         const scaleX = originalImage.width / image.width;
         const scaleY = originalImage.height / image.height;
 
         // 2. テキスト認識 (Recognition)
         const results = [];
         for (const box of boxes) {
-            // box is 4 points: [{x,y}, {x,y}, {x,y}, {x,y}]
+            // ボックス座標 (4点)
 
-            // Calculate width and height of the box
+            // ボックスの幅と高さを計算
             const edge1 = Math.hypot(box[1].x - box[0].x, box[1].y - box[0].y);
             const edge2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
 
-            // Assume longer edge is width (usually true for text)
-            // But checking orientation helps. 
-            // For now, prepare crop
+            // 長辺を幅と仮定
+            // (向きの確認が必要な場合あり)
+            // 切り出し準備
 
             // ボックス部分の画像を切り出し (Rotated Crop)
             const cropCanvas = this.cropRotatedImage(image, box);
@@ -116,20 +115,20 @@ class OnnxOCR {
             const { text, score } = await this.recognizeText(cropCanvas);
 
             if (text.length > 0 && score > this.recScoreThresh) {
-                // Scale box back to original coordinates
+                // 元画像座標へ変換
                 const outBox = box.map(p => ({
                     x: Math.round(p.x * scaleX),
                     y: Math.round(p.y * scaleY)
                 }));
 
-                // Calculate Padded Box (for visualization)
+                // パディング付きボックス計算
                 const paddedBox = this.getPaddedBox(box);
                 const outPaddedBox = paddedBox.map(p => ({
                     x: Math.round(p.x * scaleX),
                     y: Math.round(p.y * scaleY)
                 }));
 
-                // Helper to get bounding rect for sorting
+                // ソート用バウンディング短形
                 const xs = outBox.map(p => p.x);
                 const ys = outBox.map(p => p.y);
                 const minX = Math.min(...xs);
@@ -302,7 +301,7 @@ class OnnxOCR {
     }
 
     getPaddedBox(box) {
-        // Calculate dimensions same as cropRotatedImage
+        // 回転画像の切り出し時と同様の寸法計算
         const w1 = Math.hypot(box[1].x - box[0].x, box[1].y - box[0].y);
         const w2 = Math.hypot(box[3].x - box[2].x, box[3].y - box[2].y);
         const w = (w1 + w2) / 2;
@@ -311,45 +310,28 @@ class OnnxOCR {
         const h2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
         const h = (h1 + h2) / 2;
 
+        // パディング計算
         const padding = Math.max(4, Math.round(Math.min(w, h) * this.paddingRatio));
 
-        // Center
+        // 中心座標
         const cx = (box[0].x + box[2].x) / 2;
         const cy = (box[0].y + box[2].y) / 2;
 
-        // Angle (from top edge)
+        // 角度計算 (上辺の傾き)
         const angle = Math.atan2(box[1].y - box[0].y, box[1].x - box[0].x);
 
-        // Calculate unit vectors
+        // 単位ベクトル計算
         const ux = Math.cos(angle);
         const uy = Math.sin(angle);
-        const vx = -Math.sin(angle); // Perpendicular (90 deg counter-clockwise from x?) 
+        const vx = -Math.sin(angle); // 垂直方向
         const vy = Math.cos(angle);
-        // Note: Canvas Y is down. Standard rotation...
-        // If angle is direction of 0->1. 
-        // 1->2 is usually +90deg (clockwise in screen coords?)
-        // Let's check: 0->1 is "Right". 1->2 is "Down" (y increases).
-        // 0->1 vector: (1, 0). angle 0.
-        // 1->2 vector: (0, 1). 
-        // If I use (-sin, cos) for (0, 1) -> (0, 1). correct.
 
-        // Half dimensions for padded box
+        // パディング適用後のサイズ (半値)
         const halfW = (w / 2) + padding;
         const halfH = (h / 2) + padding;
 
-        // Corners: TL, TR, BR, BL
-        // TL: Center - halfW*u - halfH*v
-        // TR: Center + halfW*u - halfH*v
-        // BR: Center + halfW*u + halfH*v
-        // BL: Center - halfW*u + halfH*v
-        // Wait, "Top" is -v direction? 
-        // In screen coords, "Down" is +Y. 
-        // If 0-1 is Top edge, then center is below it.
-        // So 0-1 is at -halfH relative to Center?
-        // Let's verify direction. 
-        // Center is average. 0 is TL.
-        // Vector C->0 should be roughly (-halfW, -halfH).
-        // Let's use signs that match the relative position of box[0] to Center.
+        // 頂点計算 (TL, TR, BR, BL)
+        // 中心からベクトル演算で各頂点を求める
 
         return [
             { x: cx - halfW * ux - halfH * vx, y: cy - halfW * uy - halfH * vy }, // TL
@@ -370,17 +352,8 @@ class OnnxOCR {
         const h2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
         const h = (h1 + h2) / 2;
 
-        // Ensure width is the longer side (if logic allows vertical text, this might need check)
-        // For standard horizontal text detection, width is usually > height.
-        // If h > w, it might be vertical text or just very short text.
-        // Let's assume the box points are ordered TL, TR, BR, BL relative to text direction?
-        // Our PCA implementation returns points in counter-clockwise/clockwise order but start point varies.
-        // We need to properly orient the text.
-
-        // Find top-left most point to be index 0?
-        // PCA returns an object oriented to the main axis.
-
-        // Simplified approach: Clip the max dimension as W.
+        // 幅を長辺とする(横書き想定)
+        // 簡易的アプローチ: 最大寸法を幅として使用
         let dstW = w;
         let dstH = h;
 
@@ -397,29 +370,17 @@ class OnnxOCR {
         const cx = (box[0].x + box[2].x) / 2;
         const cy = (box[0].y + box[2].y) / 2;
 
-        // Calculate angle
-        // Assume edge 0-1 is the top edge (width)
-        // If w < h, maybe 0-1 is actually the side edge?
-        // Let's assume 0-1 corresponds to the first eigenvector direction.
-
-        // Note on PCA result:
-        // We constructed: TL, TR, BR, BL in rotated space (minX, minY)...
-        // So 0->1 is vector along X-axis in rotated space.
-        // If we assumed Angle 0 is X-axis, then 0-1 is along angle.
-
+        // 回転角度を計算 (0-1辺を幅/上辺と仮定)
+        // PCA結果の0->1ベクトルは主軸に沿っていると想定
         const angle = Math.atan2(box[1].y - box[0].y, box[1].x - box[0].x);
 
         ctx.translate(dstW / 2, dstH / 2);
-        ctx.rotate(-angle); // Rotate opposite to bring text horizontal? 
-        // If text is rotated +30deg, we need to rotate context -30deg to align?
-        // Wait, drawImage draws source to dest.
-        // We want to transform the coordinates.
-        // Easier: Transform the canvas so that drawing the image at (cx, cy) makes it upright?
+        ctx.rotate(-angle); // テキストを水平にするため逆回転
 
-        // Correct approach for 'extracting' rotated rect:
-        // 1. Translate canvas origin to center.
-        // 2. Rotate canvas by -angle (to align the box with canvas axes).
-        // 3. Draw image offset by -cx, -cy.
+        // 回転矩形抽出の手順:
+        // 1. キャンバス中心へ移動
+        // 2. 角度分逆回転 (軸合わせ)
+        // 3. 画像をオフセット位置に描画
 
         ctx.rotate(-angle);
         ctx.translate(-cx, -cy);
@@ -511,7 +472,7 @@ class OnnxOCR {
         const imageData = ctx.getImageData(0, 0, resizeW, resizeH);
         const data = imageData.data;
 
-        // Tensor作成 (NCHW format, Normalize)
+        // Tensor作成 (NCHW形式, 正規化)
         // Mean = [0.485, 0.456, 0.406], Std = [0.229, 0.224, 0.225]
         const floatData = new Float32Array(3 * resizeH * resizeW);
         const mean = [0.485, 0.456, 0.406];
@@ -531,19 +492,19 @@ class OnnxOCR {
     }
 
     /**
-     * Contours & Rotated Box Implementation
+     * 輪郭検出と回転ボックス処理
      */
     postprocessDetContours(mapData, width, height, ratioW, ratioH) {
         const boxes = [];
         const visited = new Uint8Array(width * height);
         const points = [];
 
-        // 1. Threshold & Find connected components
+        // 1. 閾値処理と連結成分探索
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const idx = y * width + x;
                 if (mapData[idx] > this.detDbThresh && visited[idx] === 0) {
-                    // Start BFS for a new component
+                    // 新規コンポーネントのBFS探索開始
                     const componentPoints = [];
                     const queue = [idx];
                     visited[idx] = 1;
@@ -558,7 +519,7 @@ class OnnxOCR {
 
                         scoreSum += mapData[currIdx];
 
-                        // 8-neighbor connectivity
+                        // 8近傍探索
                         for (let dy = -1; dy <= 1; dy++) {
                             for (let dx = -1; dx <= 1; dx++) {
                                 if (dx === 0 && dy === 0) continue;
@@ -575,31 +536,31 @@ class OnnxOCR {
                         }
                     }
 
-                    // 2. Filter small components
+                    // 2. 微小領域を除去
                     if (componentPoints.length < 10) continue;
 
-                    // 3. Score filter
+                    // 3. スコアフィルタリング
                     const meanScore = scoreSum / componentPoints.length;
                     if (meanScore < this.detDbBoxThresh) continue;
 
-                    // 4. Get Rotated Bounding Box (PCA)
+                    // 4. 回転バウンディングボックス取得 (PCA)
                     const box = this.getMinAreaRect(componentPoints);
-                    // box is 4 points: [{x,y}, {x,y}, {x,y}, {x,y}]
+                    // ボックス座標 (4点)
 
-                    // 4. Score filter (Mean score of the box)
-                    // (Simplified: just use blob existence as strong evidence, or implement mask mean if needed)
+                    // 4. ボックスの平均スコアでフィルタリング
+                    // (簡易実装: ブロブの存在を重視)
 
-                    // 5. Scale back to original image size
+                    // 5. 元サイズへ復元
                     const scaledBox = box.map(p => ({
                         x: Math.round(p.x / ratioW),
                         y: Math.round(p.y / ratioH)
                     }));
 
-                    // Box validation check
+                    // ボックス検証
                     const w = Math.hypot(scaledBox[0].x - scaledBox[1].x, scaledBox[0].y - scaledBox[1].y);
                     const h = Math.hypot(scaledBox[1].x - scaledBox[2].x, scaledBox[1].y - scaledBox[2].y);
 
-                    if (Math.min(w, h) < 5) continue; // Too thin
+                    if (Math.min(w, h) < 5) continue; // 細長すぎるため除外
 
                     boxes.push(scaledBox);
                 }
@@ -609,12 +570,12 @@ class OnnxOCR {
     }
 
     /**
-     * Calculate Rotated Bounding Box using PCA
+     * PCAによる回転バウンディングボックス計算
      */
     getMinAreaRect(points) {
         if (points.length === 0) return [];
 
-        // Calculate center (mean)
+        // 中心 (平均) の計算
         let sumX = 0, sumY = 0;
         for (const p of points) {
             sumX += p.x;
@@ -623,7 +584,7 @@ class OnnxOCR {
         const meanX = sumX / points.length;
         const meanY = sumY / points.length;
 
-        // Calculate Covariance Matrix
+        // 共分散行列の計算
         let c11 = 0, c12 = 0, c22 = 0;
         for (const p of points) {
             const dx = p.x - meanX;
@@ -636,12 +597,12 @@ class OnnxOCR {
         c12 /= points.length;
         c22 /= points.length;
 
-        // Calculate Eigenvectors
-        // Lambda calculation
+        // 固有ベクトル計算
+        // 固有値計算
         const L1 = (c11 + c22 + Math.sqrt((c11 - c22) ** 2 + 4 * c12 * c12)) / 2;
         const L2 = (c11 + c22 - Math.sqrt((c11 - c22) ** 2 + 4 * c12 * c12)) / 2;
 
-        // Eigenvector 1 (Main axis)
+        // 第1固有ベクトル (主軸)
         let angle = 0;
         if (Math.abs(c12) > 1e-6) {
             angle = Math.atan2(L1 - c11, c12);
@@ -651,7 +612,7 @@ class OnnxOCR {
             angle = Math.PI / 2; // Y-axis
         }
 
-        // Rotate points to align with main axis
+        // 主軸に合わせて点を回転
         const cos = Math.cos(-angle);
         const sin = Math.sin(-angle);
 
@@ -669,7 +630,7 @@ class OnnxOCR {
             if (ry > maxY) maxY = ry;
         }
 
-        // Construct Box corners in rotated space
+        // 回転空間でのボックス頂点算出
         const corners = [
             { x: minX, y: minY },
             { x: maxX, y: minY },
@@ -677,18 +638,15 @@ class OnnxOCR {
             { x: minX, y: maxY }
         ];
 
-        // Rotate back to original space
+        // 元の空間へ戻す
         const result = corners.map(p => {
             const x = p.x * Math.cos(angle) - p.y * Math.sin(angle) + meanX;
             const y = p.x * Math.sin(angle) + p.y * Math.cos(angle) + meanY;
             return { x, y };
         });
 
-        // Ensure consistent point ordering (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
-        // Note: Simple sorting by x/y might fail for rotated boxes.
-        // The PCA approach generates points in order: TL, TR, BR, BL relative to the rotated frame.
-        // We just need to check if the box width > height. If not (vertical text?), keep it as is.
-        // PaddleOCR expects specific order? 
+        // 頂点順序の整合性確認
+        // (簡易ソートや回転方向チェックなどが必要な場合があるが、ここではPCA順序を使用) 
         // Standard order: Sort by Y first then X?
         // Let's implement a simple sort to be safe: Find top-left-ish.
         // But the PCA loop above (minX...maxY) actually traces the rectangle counter-clockwise or clockwise.
@@ -744,6 +702,7 @@ class OnnxOCR {
     }
 
     decodeRec(data, dims) {
+        // shape: [1, seq_len, num_classes]
         const seqLen = dims[1];
         const vocabSize = dims[2];
 
@@ -827,5 +786,5 @@ class OnnxOCR {
     }
 }
 
-// Global scope attachment for importScripts
+// グローバルスコープへ登録
 self.OnnxOCR = OnnxOCR;

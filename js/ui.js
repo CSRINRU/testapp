@@ -89,7 +89,7 @@ export function setupEventListeners() {
     }
 
     // 画像アップロード
-    // 画像アップロード（labelで自動的に発火するため、クリックイベントでのclick()は不要）
+    // 画像アップロード
 
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
@@ -129,7 +129,7 @@ export function setupEventListeners() {
     const exportDataBtn = document.getElementById('exportDataBtn');
     if (exportDataBtn) exportDataBtn.addEventListener('click', exportData);
 
-    // データをインポート（labelで自動的に発火するため、クリックイベントでのclick()は不要）
+    // データをインポート
 
     const importFileInput = document.getElementById('importFileInput');
     if (importFileInput) importFileInput.addEventListener('change', importData);
@@ -196,7 +196,7 @@ export function setupEventListeners() {
         addItemBtn.addEventListener('click', () => {
             const container = document.getElementById('editItemsContainer');
             if (container) {
-                // createItemRow is available in module scope
+                // createItemRowはモジュールスコープで利用可能
                 container.appendChild(createItemRow());
             }
         });
@@ -285,8 +285,7 @@ export function updateReceiptList() {
             if (receipt.items && Array.isArray(receipt.items)) {
                 return receipt.items.some(item => (item.major_category) === categoryFilter);
             }
-            // 古いデータ構造 (receipt.category) はフォールバックなしなら無視、あるいはID比較
-            return receipt.category === categoryFilter;
+            return false;
         });
     }
 
@@ -431,7 +430,7 @@ function createItemRow(item = {}) {
     const row = document.createElement('div');
     row.className = 'item-row';
 
-    let currentMajor = item.major_category || item.category || CATEGORY_IDS.OTHER;
+    let currentMajor = item.major_category || CATEGORY_IDS.OTHER;
     let currentMinor = item.minor_category || 'other_minor';
 
     // Major Category Select
@@ -556,29 +555,15 @@ export async function saveEditedReceipt() {
         store: editStore ? editStore.value : '',
         total: editTotal ? parseInt(editTotal.value) || 0 : 0,
         items: items,
-        image: null, // 画像は保存しない(DBにはblobとして保存されるか、URLか...元々imageプロパティを使っているが、ここではnullにしている意図は？元のコード準拠だが、store.currentImageDataがあればそれを使うべきでは？元コードはimage:nullとしていた。保存関数内で処理される？いや、saveReceiptはそのままputするだけ。
-        // 元のコード: image: null
-        // しかし、db.jsではput(receipt)するだけ。
-        // 画像が消える？
-        // showReceiptModalでは updateModalImage(AppState.currentImageData || receiptData.image)。
-        // 編集時に画像を変更していなければ currentImageData は null? いえ、updateModalImageでセットされる。
-        // editReceiptで store.setCurrentImageData(receipt.image) しているので、ここにはあるはず。
-        // なので、ここで store.state.currentImageData を使うべき。
-        // 元のコードのバグ? あるいは意図的?
-        // 元のコード:
-        // AppState.currentImageData = receipt.image;
-        // ...
-        // save: image: null
-        // これだと画像消えそうだが...。
-        // あ、編集画面以外(Cameraなど)からは imageがDataURLで渡ってくる。
-        // 既存編集時も、Store内のImageDataを使うべき。
+        image: null, // 画像データは別途管理
         memo: editMemo ? editMemo.value : ''
     };
 
     // 画像データの補完
-    if (store.state.currentImageData) {
-        receipt.image = store.state.currentImageData;
-    }
+    // 画像保存は廃止されたため、ここではimageにデータをセットしない
+    // if (store.state.currentImageData) {
+    //     receipt.image = store.state.currentImageData;
+    // }
 
     // IDが設定されている場合は既存レシートを更新
     const currentId = store.state.currentReceiptId;
@@ -666,7 +651,7 @@ export function handlePeriodChange() {
 export function exportData() {
     const data = {
         receipts: store.state.receipts,
-        categoryDictionary: store.state.categoryDictionary || {}, // StoreにDictionaryあるか確認
+        categoryDictionary: store.state.categoryDictionary || {}, // 辞書データ
         exportDate: new Date().toISOString()
     };
 
@@ -742,7 +727,7 @@ export function confirmClearData() {
         await clearAllReceipts();
 
         // アプリ状態をリセット
-        await reloadReceipts(); // This will fetch empty list and update store
+        await reloadReceipts(); // ストアとUIを更新
 
         alert('全データを削除しました');
     };
