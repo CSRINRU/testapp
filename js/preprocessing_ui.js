@@ -14,6 +14,9 @@ export const PreprocessingUI = {
     // UI Elements
     elements: {},
 
+    // LocalStorage Key
+    STORAGE_KEY: 'budget_book_ocr_params',
+
     init() {
         if (this.initialized) return;
 
@@ -49,8 +52,33 @@ export const PreprocessingUI = {
             return;
         }
 
+        // Load saved params or use defaults
+        this.loadParams();
+
         this.bindEvents();
         this.initialized = true;
+    },
+
+    loadParams() {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Merge with defaults to ensure all keys exist
+                this.currentParams = { ...defaultOCRParams, ...parsed };
+                console.log('Loaded OCR params:', this.currentParams);
+            }
+        } catch (e) {
+            console.warn('Failed to load OCR params:', e);
+        }
+    },
+
+    saveParams() {
+        try {
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.currentParams));
+        } catch (e) {
+            console.warn('Failed to save OCR params:', e);
+        }
     },
 
     bindEvents() {
@@ -61,6 +89,7 @@ export const PreprocessingUI = {
                 const val = parseFloat(e.target.value);
                 if (display) display.textContent = val;
                 this.currentParams[paramName] = val;
+                this.saveParams(); // Save on change
                 if (needsPreview) this.requestPreviewUpdate();
             });
         };
@@ -70,6 +99,7 @@ export const PreprocessingUI = {
             checkbox.addEventListener('change', (e) => {
                 const val = e.target.checked;
                 this.currentParams[paramName] = val;
+                this.saveParams(); // Save on change
                 if (needsPreview) this.requestPreviewUpdate();
             });
         };
@@ -125,11 +155,12 @@ export const PreprocessingUI = {
         this.onCancel = onCancel;
 
         if (initialParams) {
+            // Explicit params override saved ones for this session, but don't overwrite storage unless changed by user
             this.currentParams = { ...initialParams };
+        } else {
+            // Reload from storage just in case or keep current
+            this.loadParams();
         }
-        // If no initial params provided, keep using previous or defaults if initialized differently. 
-        // Ideally we should reset to defaults if new session? 
-        // For now trusting caller or persistence.
 
         this.elements.section.classList.remove('hidden');
         document.querySelector('.camera-container').classList.add('hidden');

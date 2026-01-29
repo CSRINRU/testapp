@@ -184,7 +184,8 @@ export async function processImage(imageData, showReceiptModal) {
             resetView();
         },
         // 現在のパラメータ
-        defaultOCRParams
+        // 現在のパラメータ
+        null
     );
 }
 
