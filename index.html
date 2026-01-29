@@ -44,7 +44,27 @@
                 <p>レシートを撮影して内容を自動解析します</p>
             </div>
 
-            <div class="camera-container">
+            <!-- Camera Start Screen (Initial View) -->
+            <div id="camera-start-screen" class="camera-start-screen">
+                <div class="start-screen-content">
+                    <div class="icon-circle">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <h3>レシート撮影</h3>
+                    <p>ボタンを押して撮影を開始します</p>
+                    <button id="startCaptureBtn" class="btn btn-primary btn-large pulse-animation">
+                        <i class="fas fa-camera"></i> 撮影開始
+                    </button>
+                    <label for="fileInputStart" class="btn btn-secondary btn-large mt-3">
+                        <i class="fas fa-upload"></i> 画像を選択
+                    </label>
+                    <input type="file" id="fileInputStart" accept="image/*" class="hidden">
+                    <input type="file" id="fileInput" accept="image/*" class="hidden"> <!-- 既存のinputも維持または統合 -->
+                </div>
+            </div>
+
+            <!-- Actual Camera Container (Hidden initially) -->
+            <div id="camera-container" class="camera-container hidden-camera">
                 <div class="camera-view">
                     <video id="cameraPreview" autoplay playsinline></video>
                     <canvas id="photoCanvas" class="hidden"></canvas>
@@ -52,19 +72,18 @@
                     <div id="cameraOverlay" class="camera-overlay">
                         <div class="overlay-text">レシートを枠内に収めてください</div>
                     </div>
+                    <button id="closeCameraBtn" class="close-camera-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
 
                 <div class="camera-controls">
-                    <button id="captureBtn" class="btn btn-primary btn-large">
-                        <i class="fas fa-camera"></i> 撮影する
+                    <button id="captureBtn" class="btn btn-primary btn-large capture-action-btn">
+                        <div class="shutter-inner"></div>
                     </button>
                     <button id="switchCameraBtn" class="btn btn-secondary">
-                        <i class="fas fa-sync-alt"></i> カメラ切替
+                        <i class="fas fa-sync-alt"></i>
                     </button>
-                    <label for="fileInput" id="uploadBtn" class="btn btn-secondary">
-                        <i class="fas fa-upload"></i> 画像を選択
-                    </label>
-                    <input type="file" id="fileInput" accept="image/*" class="hidden">
                 </div>
 
                 <div class="processing-section hidden" id="processingSection">

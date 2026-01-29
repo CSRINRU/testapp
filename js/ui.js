@@ -62,9 +62,18 @@ export function switchTab(tabId) {
 
     // タブ固有の初期化
     if (tabId === 'camera') {
-        setupCamera();
+        // setupCamera(); // 自動起動しないで待機画面を表示
+        // カメラコンテナを非表示、開始画面を表示
+        const container = document.getElementById('camera-container');
+        const startScreen = document.getElementById('camera-start-screen');
+        if (container) container.classList.add('hidden-camera');
+        if (startScreen) startScreen.classList.remove('hidden');
+        stopCamera(); // 念のため停止
     } else if (tabId === 'analysis') {
         updateAnalysis();
+    } else {
+        // 他のタブに移動したらカメラ停止
+        stopCamera();
     }
 
     store.setCurrentTab(tabId);
@@ -203,6 +212,39 @@ export function setupEventListeners() {
                 container.appendChild(createItemRow());
             }
         });
+    }
+    // カメラ開始ボタン (新設)
+    const startCaptureBtn = document.getElementById('startCaptureBtn');
+    if (startCaptureBtn) {
+        startCaptureBtn.addEventListener('click', () => {
+            const container = document.getElementById('camera-container');
+            const startScreen = document.getElementById('camera-start-screen');
+
+            if (container) container.classList.remove('hidden-camera');
+            if (startScreen) startScreen.classList.add('hidden');
+
+            setupCamera();
+        });
+    }
+
+    // カメラ閉じるボタン (新設)
+    const closeCameraBtn = document.getElementById('closeCameraBtn');
+    if (closeCameraBtn) {
+        closeCameraBtn.addEventListener('click', () => {
+            const container = document.getElementById('camera-container');
+            const startScreen = document.getElementById('camera-start-screen');
+
+            if (container) container.classList.add('hidden-camera');
+            if (startScreen) startScreen.classList.remove('hidden');
+
+            stopCamera();
+        });
+    }
+
+    // 開始画面のファイル選択 (新設)
+    const fileInputStart = document.getElementById('fileInputStart');
+    if (fileInputStart) {
+        fileInputStart.addEventListener('change', (e) => handleImageUpload(e, showReceiptModal));
     }
 }
 

@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateReceiptList();
     updateDataCount();
 
-    // カメラ機能の設定
-    setupCamera();
+    // カメラ機能の設定 - 自動起動しない
+    // setupCamera();
 
     // イベントリスナーの設定
     setupEventListeners();
