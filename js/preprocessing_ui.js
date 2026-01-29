@@ -162,21 +162,27 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaul
         const limit = currentParams.limitSideLen;
         const isDownscaling = Math.max(w, h) > limit;
 
-        // Preview canvas is ALREADY resized?
-        // Note: preprocessImage function in OnnxOCR applies resizing IF it was part of detection preprocessing, 
-        // BUT preprocessImage method specifically handles Contrast/Sharpening.
-        // It does NOT resize to limitSideLen. Resizing happens in preprocessDet.
-        // So the image displayed here is the full resolution (or original) with contrast applied.
+        // 解像度テキストの描画
+        const text = `${w} x ${h}`;
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        // 背景
+        const textWidth = ctx.measureText(text).width;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, textWidth + 20, 40);
+
+        // 文字
+        ctx.fillStyle = '#00ff00';
+        ctx.fillText(text, 20, 20);
+
 
         if (isDownscaling) {
+            // 既にリサイズされているため、ここに来ることは論理的には少ないが念のため残す
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 10;
             ctx.strokeRect(0, 0, w, h);
-
-            ctx.fillStyle = 'red';
-            ctx.font = 'bold 40px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`Resize to ${limit}px`, w / 2, 50);
         } else {
             ctx.strokeStyle = 'lime';
             ctx.lineWidth = 5;

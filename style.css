@@ -799,6 +799,9 @@ body {
 .preprocessing-preview-single canvas {
     max-width: 100%;
     height: auto;
+    max-height: 50vh;
+    object-fit: contain;
+    height: auto;
     border: 1px solid #ddd;
     background: #fff;
 }
