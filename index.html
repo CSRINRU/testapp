@@ -89,37 +89,105 @@
                         <canvas id="prepProcessedCanvas"></canvas>
                     </div>
 
-                    <div class="preprocessing-controls-grid">
-                        <div class="control-group">
-                            <div class="control-header">
-                                <label>Contrast (コントラスト): <span id="disp-contrast">1.3</span></label>
-                                <input type="checkbox" id="check-contrast" checked title="On/Off">
+                    <!-- Tabs Navigation -->
+                    <div class="preprocessing-tabs">
+                        <button class="prep-tab-btn active" data-target="prep-tab-quality">
+                            <i class="fas fa-image"></i> 画質
+                        </button>
+                        <button class="prep-tab-btn" data-target="prep-tab-detection">
+                            <i class="fas fa-expand"></i> 検出
+                        </button>
+                        <button class="prep-tab-btn" data-target="prep-tab-recognition">
+                            <i class="fas fa-font"></i> 認識
+                        </button>
+                    </div>
+
+                    <!-- Tab Content: Quality -->
+                    <div id="prep-tab-quality" class="prep-tab-content active">
+                        <!-- Contrast Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-adjust"></i> コントラスト設定
                             </div>
-                            <input type="range" id="slider-contrast" min="0.5" max="3.0" step="0.1" value="1.3">
-                        </div>
-                        <div class="control-group">
-                            <div class="control-header">
-                                <label>Sharpening (シャープニング)</label>
-                                <input type="checkbox" id="check-sharpening" checked title="On/Off">
+                            <div class="control-row">
+                                <span class="control-label">コントラスト機能</span>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="check-contrast" checked>
+                                    <label for="check-contrast" class="toggle-slider"></label>
+                                </div>
                             </div>
-                            <div class="control-desc">鮮鋭化フィルタ (固定)</div>
+                            <div class="control-row">
+                                <span class="control-label">強度: <span id="disp-contrast">1.3</span></span>
+                                <input type="range" id="slider-contrast" min="0.5" max="3.0" step="0.1" value="1.3">
+                            </div>
                         </div>
 
-                        <div class="control-group">
-                            <label>Limit Side Len (最大辺長): <span id="disp-limitSide">2000</span>px</label>
-                            <input type="range" id="slider-limitSide" min="640" max="3200" step="32" value="2000">
+                        <!-- Sharpening Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-magic"></i> シャープニング設定
+                            </div>
+                            <div class="control-row">
+                                <span class="control-label">シャープニング機能</span>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" id="check-sharpening" checked>
+                                    <label for="check-sharpening" class="toggle-slider"></label>
+                                </div>
+                            </div>
                         </div>
-                        <div class="control-group">
-                            <label>Det Threshold (検出閾値): <span id="disp-detThresh">0.4</span></label>
-                            <input type="range" id="slider-detThresh" min="0.1" max="0.9" step="0.05" value="0.4">
+                    </div>
+
+                    <!-- Tab Content: Detection -->
+                    <div id="prep-tab-detection" class="prep-tab-content">
+                        <!-- Limit Side Len Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-ruler-combined"></i> 最大辺長 (Limit Side Len)
+                            </div>
+                            <div class="control-row stacked">
+                                <span class="control-label">値: <span id="disp-limitSide">2000</span>px</span>
+                                <input type="range" id="slider-limitSide" min="640" max="3200" step="32" value="2000">
+                                <p class="control-desc">画像の長辺をこのサイズにリサイズして検出を行います。</p>
+                            </div>
                         </div>
-                        <div class="control-group">
-                            <label>Box Threshold (Box閾値): <span id="disp-boxThresh">0.6</span></label>
-                            <input type="range" id="slider-boxThresh" min="0.1" max="0.9" step="0.05" value="0.6">
+
+                        <!-- Det Threshold Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-filter"></i> 検出閾値 (Det Threshold)
+                            </div>
+                            <div class="control-row stacked">
+                                <span class="control-label">値: <span id="disp-detThresh">0.4</span></span>
+                                <input type="range" id="slider-detThresh" min="0.1" max="0.9" step="0.05" value="0.4">
+                                <p class="control-desc">テキスト領域とみなす確率の閾値です。</p>
+                            </div>
                         </div>
-                        <div class="control-group">
-                            <label>Rec Threshold (認識閾値): <span id="disp-recThresh">0.6</span></label>
-                            <input type="range" id="slider-recThresh" min="0.1" max="1.0" step="0.05" value="0.6">
+
+                        <!-- Box Threshold Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-vector-square"></i> Box閾値 (Box Threshold)
+                            </div>
+                            <div class="control-row stacked">
+                                <span class="control-label">値: <span id="disp-boxThresh">0.6</span></span>
+                                <input type="range" id="slider-boxThresh" min="0.1" max="0.9" step="0.05" value="0.6">
+                                <p class="control-desc">検出された領域を確定させるための閾値です。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab Content: Recognition -->
+                    <div id="prep-tab-recognition" class="prep-tab-content">
+                        <!-- Rec Threshold Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-check-double"></i> 認識閾値 (Rec Threshold)
+                            </div>
+                            <div class="control-row stacked">
+                                <span class="control-label">値: <span id="disp-recThresh">0.6</span></span>
+                                <input type="range" id="slider-recThresh" min="0.1" max="1.0" step="0.05" value="0.6">
+                                <p class="control-desc">文字認識の信頼度がこれより低い場合は無視します。</p>
+                            </div>
                         </div>
                     </div>
                 </div>

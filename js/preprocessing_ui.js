@@ -52,6 +52,25 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaul
         });
     };
 
+    // Tab Switching Logic
+    const tabBtns = document.querySelectorAll('.prep-tab-btn');
+    const tabContents = document.querySelectorAll('.prep-tab-content');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+
+            // Deactivate all
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            // Activate target
+            btn.classList.add('active');
+            const targetContent = document.getElementById(targetId);
+            if (targetContent) targetContent.classList.add('active');
+        });
+    });
+
     // Bindings
     bindSlider(sliderContrast, dispContrast, 'preprocessContrast', true);
     bindCheckbox(checkContrast, 'enableContrast', true);

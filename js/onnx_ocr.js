@@ -145,9 +145,21 @@ class OnnxOCR {
      * @returns {OffscreenCanvas}
      */
     preprocessImage(image) {
-        const canvas = new OffscreenCanvas(image.width, image.height);
+        let width = image.width;
+        let height = image.height;
+
+        // 0. リサイズ (limitSideLen)
+        if (Math.max(width, height) > this.limitSideLen) {
+            const ratio = Math.max(width, height) > 0 ? this.limitSideLen / Math.max(width, height) : 1;
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+
+        const canvas = new OffscreenCanvas(width, height);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(image, 0, 0);
+
+        // drawImageでリサイズ適用
+        ctx.drawImage(image, 0, 0, width, height);
 
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
