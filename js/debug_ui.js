@@ -37,7 +37,7 @@ export const DebugUI = {
                 ctx.lineWidth = 3;
                 ocrResult.blocks.forEach(block => {
                     const { box, text, score } = block;
-                    // box: x, y, w, h
+                    // box: [{x,y}, {x,y}, {x,y}, {x,y}] or {x,y,w,h} (fallback)
 
                     // Color based on confidence (optional)
                     if (score > 0.8) {
@@ -48,10 +48,21 @@ export const DebugUI = {
                         ctx.fillStyle = 'rgba(255, 165, 0, 0.2)';
                     }
 
-                    ctx.strokeRect(box.x, box.y, box.w, box.h);
-
-                    // Draw text? Might be too crowded. Maybe on hover?
-                    // Let's draw text on the side list
+                    if (Array.isArray(box)) {
+                        // Rotated Box (Polygon)
+                        ctx.beginPath();
+                        ctx.moveTo(box[0].x, box[0].y);
+                        for (let i = 1; i < box.length; i++) {
+                            ctx.lineTo(box[i].x, box[i].y);
+                        }
+                        ctx.closePath();
+                        ctx.stroke();
+                        // Optional: Fill
+                        // ctx.fill(); 
+                    } else {
+                        // Fallback for old style box
+                        ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    }
                 });
             }
         };

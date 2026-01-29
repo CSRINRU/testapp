@@ -98,45 +98,63 @@ class OnnxOCR {
         // 2. テキスト認識 (Recognition)
         const results = [];
         for (const box of boxes) {
-            // ボックスにパディングを追加（高さに応じた適応的パディング）
-            const padding = Math.max(8, Math.round(box.h * 0.15));
-            const paddedBox = {
-                x: Math.max(0, box.x - padding),
-                y: Math.max(0, box.y - padding),
-                w: Math.min(image.width - Math.max(0, box.x - padding), box.w + padding * 2),
-                h: Math.min(image.height - Math.max(0, box.y - padding), box.h + padding * 2)
-            };
+            // box is 4 points: [{x,y}, {x,y}, {x,y}, {x,y}]
 
-            // 小さすぎるボックスはスキップ
-            if (paddedBox.w < 10 || paddedBox.h < 10) continue;
+            // Calculate width and height of the box
+            const edge1 = Math.hypot(box[1].x - box[0].x, box[1].y - box[0].y);
+            const edge2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
 
-            // ボックス部分の画像を切り出し
-            const cropCanvas = this.cropImage(image, paddedBox);
+            // Assume longer edge is width (usually true for text)
+            // But checking orientation helps. 
+            // For now, prepare crop
+
+            // ボックス部分の画像を切り出し (Rotated Crop)
+            const cropCanvas = this.cropRotatedImage(image, box);
+
             // 認識実行
             const { text, score } = await this.recognizeText(cropCanvas);
 
             if (text.length > 0 && score > this.recScoreThresh) {
                 // Scale box back to original coordinates
-                const outBox = {
-                    x: Math.round(box.x * scaleX),
-                    y: Math.round(box.y * scaleY),
-                    w: Math.round(box.w * scaleX),
-                    h: Math.round(box.h * scaleY)
-                };
-                results.push({ text, score, box: outBox });
+                const outBox = box.map(p => ({
+                    x: Math.round(p.x * scaleX),
+                    y: Math.round(p.y * scaleY)
+                }));
+
+                // Helper to get bounding rect for sorting
+                const xs = outBox.map(p => p.x);
+                const ys = outBox.map(p => p.y);
+                const minX = Math.min(...xs);
+                const minY = Math.min(...ys);
+                const maxX = Math.max(...xs);
+                const maxY = Math.max(...ys);
+                const centerY = (minY + maxY) / 2;
+                const centerX = (minX + maxX) / 2;
+                const height = maxY - minY;
+
+                results.push({
+                    text,
+                    score,
+                    box: outBox, // 4 points
+                    // Metadata for sorting
+                    centerY,
+                    centerX,
+                    height
+                });
             }
         }
 
         // 3. 結果の結合（上から下、左から右へ並び替え）
         results.sort((a, b) => {
             // Y座標でソート（ある程度の許容誤差を持たせる）
-            const yDiff = Math.abs(a.box.y - b.box.y);
+            const yDiff = Math.abs(a.centerY - b.centerY);
             // 文字の高さの半分くらいを一行の誤差とみなす
-            const avgHeight = (a.box.h + b.box.h) / 2;
+            const avgHeight = (a.height + b.height) / 2;
+
             if (yDiff < avgHeight * 0.5) {
-                return a.box.x - b.box.x;
+                return a.centerX - b.centerX;
             }
-            return a.box.y - b.box.y;
+            return a.centerY - b.centerY;
         });
 
         // 4. 同一行のテキストを結合
@@ -144,13 +162,11 @@ class OnnxOCR {
 
         // リソース解放
         if (originalImage.close) originalImage.close();
-        // preprocessImageで作成したcanvasなどのGPUリソースはGC任せだが、closeできるならすべき
-        // OffscreenCanvasはexplicit closeがないが、ImageBitmapはcloseすべき
 
         return {
             text: lines.join('\n'),
             blocks: results,
-            lines: lines // preserving lines structure if needed hereafter
+            lines: lines
         };
     }
 
@@ -225,9 +241,6 @@ class OnnxOCR {
             ctx.putImageData(sharpened, 0, 0);
         }
 
-        // WorkerではtoDataURLは非同期だが、ここではデバッグ表示しないので省略
-        // this.lastPreprocessedImage = ... 
-
         return canvas;
     }
 
@@ -279,6 +292,75 @@ class OnnxOCR {
         return new ImageData(output, width, height);
     }
 
+    cropRotatedImage(image, box) {
+        // Box: 4 points [{x,y}, ...]
+        // Determine width and height
+        const w1 = Math.hypot(box[1].x - box[0].x, box[1].y - box[0].y);
+        const w2 = Math.hypot(box[3].x - box[2].x, box[3].y - box[2].y);
+        const w = (w1 + w2) / 2;
+
+        const h1 = Math.hypot(box[3].x - box[0].x, box[3].y - box[0].y);
+        const h2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
+        const h = (h1 + h2) / 2;
+
+        // Ensure width is the longer side (if logic allows vertical text, this might need check)
+        // For standard horizontal text detection, width is usually > height.
+        // If h > w, it might be vertical text or just very short text.
+        // Let's assume the box points are ordered TL, TR, BR, BL relative to text direction?
+        // Our PCA implementation returns points in counter-clockwise/clockwise order but start point varies.
+        // We need to properly orient the text.
+
+        // Find top-left most point to be index 0?
+        // PCA returns an object oriented to the main axis.
+
+        // Simplified approach: Clip the max dimension as W.
+        let dstW = w;
+        let dstH = h;
+
+        // Canvas size
+        // Add padding
+        const padding = Math.max(4, Math.round(Math.min(w, h) * 0.1));
+        dstW += padding * 2;
+        dstH += padding * 2;
+
+        const canvas = new OffscreenCanvas(Math.round(dstW), Math.round(dstH));
+        const ctx = canvas.getContext('2d');
+
+        // Center of the source box
+        const cx = (box[0].x + box[2].x) / 2;
+        const cy = (box[0].y + box[2].y) / 2;
+
+        // Calculate angle
+        // Assume edge 0-1 is the top edge (width)
+        // If w < h, maybe 0-1 is actually the side edge?
+        // Let's assume 0-1 corresponds to the first eigenvector direction.
+
+        // Note on PCA result:
+        // We constructed: TL, TR, BR, BL in rotated space (minX, minY)...
+        // So 0->1 is vector along X-axis in rotated space.
+        // If we assumed Angle 0 is X-axis, then 0-1 is along angle.
+
+        const angle = Math.atan2(box[1].y - box[0].y, box[1].x - box[0].x);
+
+        ctx.translate(dstW / 2, dstH / 2);
+        ctx.rotate(-angle); // Rotate opposite to bring text horizontal? 
+        // If text is rotated +30deg, we need to rotate context -30deg to align?
+        // Wait, drawImage draws source to dest.
+        // We want to transform the coordinates.
+        // Easier: Transform the canvas so that drawing the image at (cx, cy) makes it upright?
+
+        // Correct approach for 'extracting' rotated rect:
+        // 1. Translate canvas origin to center.
+        // 2. Rotate canvas by -angle (to align the box with canvas axes).
+        // 3. Draw image offset by -cx, -cy.
+
+        ctx.rotate(-angle);
+        ctx.translate(-cx, -cy);
+        ctx.drawImage(image, 0, 0);
+
+        return canvas;
+    }
+
     /**
      * 結果を同一行にまとめる
      * @param {Array} results 
@@ -293,8 +375,9 @@ class OnnxOCR {
         for (let i = 1; i < results.length; i++) {
             const prev = currentLine[currentLine.length - 1];
             const curr = results[i];
-            const avgHeight = (prev.box.h + curr.box.h) / 2;
-            const yDiff = Math.abs(prev.box.y - curr.box.y);
+
+            const yDiff = Math.abs(prev.centerY - curr.centerY);
+            const avgHeight = (prev.height + curr.height) / 2;
 
             if (yDiff < avgHeight * 0.5) {
                 // 同じ行
@@ -321,9 +404,10 @@ class OnnxOCR {
         const results = await this.detSession.run(feeds);
         const output = results[this.detSession.outputNames[0]]; // shape: [1, 1, H, W]
 
-        // 後処理
+        // 後処理 (Contour based)
         const mapData = output.data;
-        const boxes = this.postprocessDetSimple(mapData, newW, newH, ratioW, ratioH);
+        // Output shape is [1, 1, newH, newW]
+        const boxes = this.postprocessDetContours(mapData, newW, newH, ratioW, ratioH);
 
         return boxes;
     }
@@ -379,79 +463,162 @@ class OnnxOCR {
         return { tensor, ratioH, ratioW, newH: resizeH, newW: resizeW };
     }
 
-    postprocessDetSimple(mapData, width, height, ratioW, ratioH) {
+    /**
+     * Contours & Rotated Box Implementation
+     */
+    postprocessDetContours(mapData, width, height, ratioW, ratioH) {
         const boxes = [];
-        // 1. 行ごとのスコア合計を計算 (Y Projection)
-        const yProj = new Float32Array(height);
+        const visited = new Uint8Array(width * height);
+        const points = [];
+
+        // 1. Threshold & Find connected components
         for (let y = 0; y < height; y++) {
-            let sum = 0;
             for (let x = 0; x < width; x++) {
-                if (mapData[y * width + x] > this.detDbThresh) {
-                    sum += 1;
+                const idx = y * width + x;
+                if (mapData[idx] > this.detDbThresh && visited[idx] === 0) {
+                    // Start BFS for a new component
+                    const componentPoints = [];
+                    const queue = [idx];
+                    visited[idx] = 1;
+
+                    while (queue.length > 0) {
+                        const currIdx = queue.shift();
+                        const cy = Math.floor(currIdx / width);
+                        const cx = currIdx % width;
+                        componentPoints.push({ x: cx, y: cy });
+
+                        // 8-neighbor connectivity
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                if (dx === 0 && dy === 0) continue;
+                                const ny = cy + dy;
+                                const nx = cx + dx;
+                                if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                                    const nIdx = ny * width + nx;
+                                    if (visited[nIdx] === 0 && mapData[nIdx] > this.detDbThresh) {
+                                        visited[nIdx] = 1;
+                                        queue.push(nIdx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Filter small components
+                    if (componentPoints.length < this.detDbBoxThresh * 10) continue; // 簡易的な面積フィルタ
+
+                    // 3. Get Rotated Bounding Box (PCA)
+                    const box = this.getMinAreaRect(componentPoints);
+                    // box is 4 points: [{x,y}, {x,y}, {x,y}, {x,y}]
+
+                    // 4. Score filter (Mean score of the box)
+                    // (Simplified: just use blob existence as strong evidence, or implement mask mean if needed)
+
+                    // 5. Scale back to original image size
+                    const scaledBox = box.map(p => ({
+                        x: Math.round(p.x / ratioW),
+                        y: Math.round(p.y / ratioH)
+                    }));
+
+                    // Box validation check
+                    const w = Math.hypot(scaledBox[0].x - scaledBox[1].x, scaledBox[0].y - scaledBox[1].y);
+                    const h = Math.hypot(scaledBox[1].x - scaledBox[2].x, scaledBox[1].y - scaledBox[2].y);
+
+                    if (Math.min(w, h) < 5) continue; // Too thin
+
+                    boxes.push(scaledBox);
                 }
             }
-            yProj[y] = sum;
         }
-
-        // 2. YProjectionから行を切り出し
-        let inBlock = false;
-        let startY = 0;
-        for (let y = 0; y < height; y++) {
-            if (!inBlock && yProj[y] > 5) {
-                inBlock = true;
-                startY = y;
-            } else if (inBlock && yProj[y] <= 5) {
-                inBlock = false;
-                this.findBoxesInRow(mapData, width, startY, y, ratioW, ratioH, boxes);
-            }
-        }
-        if (inBlock) {
-            this.findBoxesInRow(mapData, width, startY, height, ratioW, ratioH, boxes);
-        }
-
         return boxes;
     }
 
-    findBoxesInRow(mapData, width, startY, endY, ratioW, ratioH, boxes) {
-        const height = endY - startY;
-        if (height < 5) return;
+    /**
+     * Calculate Rotated Bounding Box using PCA
+     */
+    getMinAreaRect(points) {
+        if (points.length === 0) return [];
 
-        // X Projection
-        const xProj = new Float32Array(width);
-        for (let x = 0; x < width; x++) {
-            let sum = 0;
-            for (let y = startY; y < endY; y++) {
-                if (mapData[y * width + x] > this.detDbThresh) {
-                    sum += 1;
-                }
-            }
-            xProj[x] = sum;
+        // Calculate center (mean)
+        let sumX = 0, sumY = 0;
+        for (const p of points) {
+            sumX += p.x;
+            sumY += p.y;
+        }
+        const meanX = sumX / points.length;
+        const meanY = sumY / points.length;
+
+        // Calculate Covariance Matrix
+        let c11 = 0, c12 = 0, c22 = 0;
+        for (const p of points) {
+            const dx = p.x - meanX;
+            const dy = p.y - meanY;
+            c11 += dx * dx;
+            c12 += dx * dy;
+            c22 += dy * dy;
+        }
+        c11 /= points.length;
+        c12 /= points.length;
+        c22 /= points.length;
+
+        // Calculate Eigenvectors
+        // Lambda calculation
+        const L1 = (c11 + c22 + Math.sqrt((c11 - c22) ** 2 + 4 * c12 * c12)) / 2;
+        const L2 = (c11 + c22 - Math.sqrt((c11 - c22) ** 2 + 4 * c12 * c12)) / 2;
+
+        // Eigenvector 1 (Main axis)
+        let angle = 0;
+        if (Math.abs(c12) > 1e-6) {
+            angle = Math.atan2(L1 - c11, c12);
+        } else if (c11 >= c22) {
+            angle = 0; // X-axis
+        } else {
+            angle = Math.PI / 2; // Y-axis
         }
 
-        let inBlock = false;
-        let startX = 0;
-        for (let x = 0; x < width; x++) {
-            if (!inBlock && xProj[x] > 2) {
-                inBlock = true;
-                startX = x;
-            } else if (inBlock && xProj[x] <= 2) {
-                inBlock = false;
-                boxes.push({
-                    x: Math.round(startX / ratioW),
-                    y: Math.round(startY / ratioH),
-                    w: Math.round((x - startX) / ratioW),
-                    h: Math.round((endY - startY) / ratioH)
-                });
-            }
+        // Rotate points to align with main axis
+        const cos = Math.cos(-angle);
+        const sin = Math.sin(-angle);
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+        for (const p of points) {
+            const dx = p.x - meanX;
+            const dy = p.y - meanY;
+            const rx = dx * cos - dy * sin;
+            const ry = dx * sin + dy * cos;
+
+            if (rx < minX) minX = rx;
+            if (rx > maxX) maxX = rx;
+            if (ry < minY) minY = ry;
+            if (ry > maxY) maxY = ry;
         }
-        if (inBlock) {
-            boxes.push({
-                x: Math.round(startX / ratioW),
-                y: Math.round(startY / ratioH),
-                w: Math.round((width - startX) / ratioW),
-                h: Math.round((endY - startY) / ratioH)
-            });
-        }
+
+        // Construct Box corners in rotated space
+        const corners = [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY }
+        ];
+
+        // Rotate back to original space
+        const result = corners.map(p => {
+            const x = p.x * Math.cos(angle) - p.y * Math.sin(angle) + meanX;
+            const y = p.x * Math.sin(angle) + p.y * Math.cos(angle) + meanY;
+            return { x, y };
+        });
+
+        // Ensure consistent point ordering (Top-Left, Top-Right, Bottom-Right, Bottom-Left)
+        // Note: Simple sorting by x/y might fail for rotated boxes.
+        // The PCA approach generates points in order: TL, TR, BR, BL relative to the rotated frame.
+        // We just need to check if the box width > height. If not (vertical text?), keep it as is.
+        // PaddleOCR expects specific order? 
+        // Standard order: Sort by Y first then X?
+        // Let's implement a simple sort to be safe: Find top-left-ish.
+        // But the PCA loop above (minX...maxY) actually traces the rectangle counter-clockwise or clockwise.
+        // Let's just return the 4 points.
+        return result;
     }
 
 

@@ -148,14 +148,20 @@ export async function processImage(imageData, showReceiptModal) {
                 console.log('全体テキスト:', ocrResult.text);
                 console.log('抽出ブロック数:', ocrResult.blocks ? ocrResult.blocks.length : 0);
                 if (ocrResult.blocks && ocrResult.blocks.length > 0) {
-                    console.table(ocrResult.blocks.map(b => ({
-                        text: b.text,
-                        score: (b.score * 100).toFixed(1) + '%',
-                        x: b.box.x,
-                        y: b.box.y,
-                        w: b.box.w,
-                        h: b.box.h
-                    })));
+                    console.table(ocrResult.blocks.map(b => {
+                        let dimStr = '';
+                        if (Array.isArray(b.box)) {
+                            // Calculate center or just show first point
+                            dimStr = `(${b.box[0].x},${b.box[0].y})...`;
+                        } else {
+                            dimStr = `${b.box.x},${b.box.y},${b.box.w},${b.box.h}`;
+                        }
+                        return { // Return object for table
+                            text: b.text,
+                            score: (b.score * 100).toFixed(1) + '%',
+                            box: dimStr
+                        };
+                    }));
                 } else {
                     console.log('抽出されたブロックはありません');
                 }
