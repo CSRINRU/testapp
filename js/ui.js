@@ -125,6 +125,9 @@ export function setupEventListeners() {
     const analysisPeriod = document.getElementById('analysisPeriod');
     if (analysisPeriod) analysisPeriod.addEventListener('change', updateAnalysis);
 
+    const analysisCategory = document.getElementById('analysisCategory');
+    if (analysisCategory) analysisCategory.addEventListener('change', updateAnalysis);
+
     // データ管理
     const exportDataBtn = document.getElementById('exportDataBtn');
     if (exportDataBtn) exportDataBtn.addEventListener('click', exportData);

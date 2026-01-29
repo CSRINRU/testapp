@@ -1,321 +1,378 @@
 import { store } from './store.js';
-import { MAJOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS } from './constants.js';
+import { MAJOR_CATEGORY_DISPLAY_NAMES, MINOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS } from './constants.js';
+
+// Chart instances
+let categoryChartInstance = null;
+let storeChartInstance = null;
+let trendChartInstance = null;
+
+// Color Palette
+const COLORS = [
+    '#4e54c8', '#8f94fb', '#ff6b6b', '#4ecdc4', '#ffd166',
+    '#06d6a0', '#118ab2', '#ef476f', '#1d3557', '#fb8500',
+    '#219ebc', '#ffb703', '#8ecae6', '#e63946', '#f1faee'
+];
 
 /**
  * 分析データの更新
  */
 export function updateAnalysis() {
     const receipts = store.state.receipts;
-    if (receipts.length === 0) {
-        // データがない場合の表示
-        const totalAmountEl = document.getElementById('totalAmount');
-        const receiptCountEl = document.getElementById('receiptCount');
-        const avgAmountEl = document.getElementById('avgAmount');
-        const topCategoryEl = document.getElementById('topCategory');
-
-        if (totalAmountEl) totalAmountEl.textContent = '¥0';
-        if (receiptCountEl) receiptCountEl.textContent = '0';
-        if (avgAmountEl) avgAmountEl.textContent = '¥0';
-        if (topCategoryEl) topCategoryEl.textContent = '-';
-
-        // グラフをクリア
-        clearCharts();
+    if (!receipts || receipts.length === 0) {
+        displayEmptyState();
         return;
     }
 
-    // 分析期間の取得
+    // --- 1. Filter by Period ---
     const periodEl = document.getElementById('analysisPeriod');
     const period = periodEl ? periodEl.value : 'month';
-    let filteredReceipts = [...receipts];
+    let filteredReceipts = filterByPeriod([...receipts], period);
 
-    if (period !== 'custom') {
-        const now = new Date();
-        let startDate;
+    // --- 2. Filter by Category ---
+    const categoryEl = document.getElementById('analysisCategory');
+    const selectedCategory = categoryEl ? categoryEl.value : 'all';
 
-        switch (period) {
-            case 'month':
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                break;
-            case 'lastMonth':
-                startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                const endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-                filteredReceipts = filteredReceipts.filter(receipt => {
-                    const receiptDate = new Date(receipt.date);
-                    return receiptDate >= startDate && receiptDate <= endDate;
-                });
-                break;
-            case '3months':
-                startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-                break;
-            case 'year':
-                startDate = new Date(now.getFullYear(), 0, 1);
-                break;
-        }
+    if (selectedCategory !== 'all') {
+        filteredReceipts = filteredReceipts.filter(receipt => {
+            if (!receipt.items) return false;
+            // レシート内のアイテムに該当カテゴリが含まれているか
+            // (簡易的に、レシート自体を残すが、集計時にアイテム単位で判定する必要がある)
+            // ここでは「レシート単位」でフィルタするのではなく、「データ集計時」にフィルタする方が正確だが、
+            // UI上の合計金額なども連動させるため、ここでアイテムをフィルタした「新しいレシートオブジェクト」を作るのがベター
 
-        if (period !== 'lastMonth' && startDate) {
-            filteredReceipts = filteredReceipts.filter(receipt => {
-                return new Date(receipt.date) >= startDate;
-            });
-        }
+            const relevantItems = receipt.items.filter(item => item.major_category === selectedCategory);
+            return relevantItems.length > 0;
+        }).map(receipt => {
+            // 該当カテゴリのアイテムのみを持つ一時的なレシートオブジェクトを作成
+            const relevantItems = receipt.items.filter(item => item.major_category === selectedCategory);
+            const newTotal = relevantItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+            return {
+                ...receipt,
+                items: relevantItems,
+                total: newTotal
+            };
+        }).filter(r => r.total > 0);
     }
+
+    if (filteredReceipts.length === 0) {
+        displayEmptyState();
+        return;
+    }
+
+    // --- 3. Calculate Logic ---
 
     // 基本統計
     const totalAmount = filteredReceipts.reduce((sum, receipt) => sum + receipt.total, 0);
     const receiptCount = filteredReceipts.length;
     const avgAmount = receiptCount > 0 ? Math.round(totalAmount / receiptCount) : 0;
 
-    // 最多カテゴリ集計 (大カテゴリ)
-    const categoryCount = {};
-    filteredReceipts.forEach(receipt => {
-        if (receipt.items && receipt.items.length > 0) {
-            receipt.items.forEach(item => {
-                const cat = item.major_category || 'その他';
-                categoryCount[cat] = (categoryCount[cat] || 0) + 1;
-            });
-        }
-    });
-
-    let topCategory = '-';
-    let maxCount = 0;
-    for (const [category, count] of Object.entries(categoryCount)) {
-        if (count > maxCount) {
-            maxCount = count;
-            topCategory = MAJOR_CATEGORY_DISPLAY_NAMES[category] || category; // IDから名前に変換
-        }
+    // 最多カテゴリ集計 (選択されたカテゴリによって意味が変わる)
+    let topCategoryLabel = '-';
+    if (selectedCategory === 'all') {
+        // 大カテゴリで集計
+        topCategoryLabel = getTopCategory(filteredReceipts, 'major');
+    } else {
+        // 小カテゴリで集計
+        topCategoryLabel = getTopCategory(filteredReceipts, 'minor', selectedCategory); // selectedCategory is explicit context
     }
 
     // 統計を表示
-    const totalAmountEl = document.getElementById('totalAmount');
-    const receiptCountEl = document.getElementById('receiptCount');
-    const avgAmountEl = document.getElementById('avgAmount');
-    const topCategoryEl = document.getElementById('topCategory');
-
-    if (totalAmountEl) totalAmountEl.textContent = `¥${totalAmount.toLocaleString()}`;
-    if (receiptCountEl) receiptCountEl.textContent = receiptCount;
-    if (avgAmountEl) avgAmountEl.textContent = `¥${avgAmount.toLocaleString()}`;
-    if (topCategoryEl) topCategoryEl.textContent = topCategory;
+    updateStatsDisplay(totalAmount, receiptCount, avgAmount, topCategoryLabel);
 
     // グラフを描画
-    drawCharts(filteredReceipts);
+    drawCharts(filteredReceipts, selectedCategory, period);
 
     // よく買う商品を表示
     updateTopProducts(filteredReceipts);
 }
 
 /**
- * グラフをクリア
+ * 空の状態を表示
  */
-export function clearCharts() {
-    const categoryCanvas = document.getElementById('categoryChart');
-    const storeCanvas = document.getElementById('storeChart');
+function displayEmptyState() {
+    const ids = ['totalAmount', 'receiptCount', 'avgAmount', 'topCategory'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = id === 'topCategory' ? '-' : (id === 'receiptCount' ? '0' : '¥0');
+    });
 
-    if (categoryCanvas) {
-        const ctx = categoryCanvas.getContext('2d');
-        ctx.clearRect(0, 0, categoryCanvas.width, categoryCanvas.height);
-    }
+    // Clear Charts
+    if (categoryChartInstance) { categoryChartInstance.destroy(); categoryChartInstance = null; }
+    if (storeChartInstance) { storeChartInstance.destroy(); storeChartInstance = null; }
+    if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
 
-    if (storeCanvas) {
-        const ctx = storeCanvas.getContext('2d');
-        ctx.clearRect(0, 0, storeCanvas.width, storeCanvas.height);
-    }
-
-    // 商品リストをクリア
+    // Clear Products
     const topProductsEl = document.getElementById('topProducts');
     if (topProductsEl) topProductsEl.innerHTML = '<p class="empty-text">データがありません</p>';
 }
 
 /**
- * グラフを描画
- * @param {Object[]} receipts 
+ * 期間フィルタリング
  */
-export function drawCharts(receipts) {
-    // カテゴリ別支出グラフ
-    drawCategoryChart(receipts);
+function filterByPeriod(receipts, period) {
+    if (period === 'custom') return receipts; // Implement custom later if needed or rely on inputs (not fully impl in this snippet)
 
-    // 店舗別支出グラフ
-    drawStoreChart(receipts);
+    const now = new Date();
+    let startDate;
+    let endDate;
+
+    switch (period) {
+        case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+        case 'lastMonth':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            break;
+        case '3months':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1); // Exact logic: Start of 2 months ago
+            break;
+        case 'year':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+    }
+
+    return receipts.filter(receipt => {
+        const d = new Date(receipt.date);
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+    });
 }
 
 /**
- * カテゴリ別支出グラフ
- * @param {Object[]} receipts 
+ * 最多カテゴリ取得
  */
-export function drawCategoryChart(receipts) {
+function getTopCategory(receipts, type, contextMajorCategory = null) {
+    const counts = {};
+    receipts.forEach(r => {
+        r.items.forEach(item => {
+            let key;
+            if (type === 'major') {
+                key = item.major_category || 'other';
+            } else {
+                key = item.minor_category || 'other_minor';
+            }
+            if (!contextMajorCategory || item.major_category === contextMajorCategory) {
+                counts[key] = (counts[key] || 0) + 1;
+            }
+        });
+    });
+
+    let max = 0;
+    let topKey = null;
+    for (const [key, val] of Object.entries(counts)) {
+        if (val > max) {
+            max = val;
+            topKey = key;
+        }
+    }
+
+    if (!topKey) return '-';
+
+    if (type === 'major') {
+        return MAJOR_CATEGORY_DISPLAY_NAMES[topKey] || topKey;
+    } else {
+        return MINOR_CATEGORY_DISPLAY_NAMES[topKey] || topKey; // Assuming minor names map exists
+    }
+}
+
+/**
+ * 統計表示更新
+ */
+function updateStatsDisplay(total, count, avg, topCat) {
+    const elTotal = document.getElementById('totalAmount');
+    const elCount = document.getElementById('receiptCount');
+    const elAvg = document.getElementById('avgAmount');
+    const elTop = document.getElementById('topCategory');
+
+    if (elTotal) elTotal.textContent = `¥${total.toLocaleString()}`;
+    if (elCount) elCount.textContent = count;
+    if (elAvg) elAvg.textContent = `¥${avg.toLocaleString()}`;
+    if (elTop) elTop.textContent = topCat;
+}
+
+/**
+ * グラフ描画統括
+ */
+function drawCharts(receipts, selectedCategory, period) {
+    drawCategoryChart(receipts, selectedCategory);
+    drawStoreChart(receipts);
+    drawTrendChart(receipts, period);
+}
+
+/**
+ * カテゴリチャート (Pie)
+ */
+function drawCategoryChart(receipts, selectedCategory) {
     const canvas = document.getElementById('categoryChart');
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
 
-    // カテゴリ別合計を計算
-    const categoryTotals = {};
+    // Destroy existing
+    if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+        categoryChartInstance = null;
+    }
 
-    receipts.forEach(receipt => {
-        let itemsTotal = 0;
+    const totals = {};
+    receipts.forEach(r => {
+        r.items.forEach(item => {
+            let key;
+            let displayKey;
 
-        if (receipt.items && receipt.items.length > 0) {
-            receipt.items.forEach(item => {
-                const amount = item.amount || 0; // 金額がない場合は0
-                const cat = item.major_category || 'その他';
-                categoryTotals[cat] = (categoryTotals[cat] || 0) + amount;
-                itemsTotal += amount;
-            });
-        }
-
-        // 差額を「不明」として計上
-        if (receipt.total > itemsTotal) {
-            const diff = receipt.total - itemsTotal;
-            categoryTotals['不明'] = (categoryTotals['不明'] || 0) + diff;
-        }
+            if (selectedCategory === 'all') {
+                key = item.major_category || 'other';
+                displayKey = MAJOR_CATEGORY_DISPLAY_NAMES[key] || key;
+            } else {
+                // Breakdown of the selected category
+                key = item.minor_category || 'unknown'; // Use minor category ID
+                // Map to display name if available, else usage raw ID
+                displayKey = MINOR_CATEGORY_DISPLAY_NAMES[key] || key;
+            }
+            totals[displayKey] = (totals[displayKey] || 0) + (item.amount || 0);
+        });
     });
 
-    // データの準備
-    const categories = Object.keys(categoryTotals);
-    const amounts = Object.values(categoryTotals);
+    const labels = Object.keys(totals);
+    const data = Object.values(totals);
 
-    // 色の配列
-    const colors = [
-        '#4e54c8', '#8f94fb', '#ff6b6b', '#4ecdc4', '#ffd166',
-        '#06d6a0', '#118ab2', '#ef476f', '#ffd166', '#073b4c'
-    ];
+    if (labels.length === 0) return; // Should allow empty chart or handle it
 
-    // キャンバスのクリア
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (amounts.length === 0) return;
-
-    // 円グラフ描画
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = Math.min(centerX, centerY) - 10;
-
-    let startAngle = 0;
-    const total = amounts.reduce((sum, amount) => sum + amount, 0);
-
-    // 円グラフの描画
-    for (let i = 0; i < amounts.length; i++) {
-        const sliceAngle = (amounts[i] / total) * 2 * Math.PI;
-
-        // 扇形の描画
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
-        ctx.closePath();
-        ctx.fillStyle = colors[i % colors.length];
-        ctx.fill();
-
-        // 凡例の描画
-        const legendX = 20;
-        const legendY = 20 + i * 25;
-        const legendWidth = 15;
-        const legendHeight = 15;
-
-        ctx.fillStyle = colors[i % colors.length];
-        ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
-
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'left';
-
-        // カテゴリ名を表示用に変換
-        const displayName = MAJOR_CATEGORY_DISPLAY_NAMES[categories[i]] || categories[i];
-
-        ctx.fillText(
-            `${displayName}: ¥${amounts[i].toLocaleString()} (${Math.round(amounts[i] / total * 100)}%)`,
-            legendX + legendWidth + 10,
-            legendY + legendHeight - 3
-        );
-
-        startAngle += sliceAngle;
-    }
+    categoryChartInstance = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: COLORS,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                title: {
+                    display: true,
+                    text: selectedCategory === 'all' ? 'カテゴリ別支出' : `${MAJOR_CATEGORY_DISPLAY_NAMES[selectedCategory] || selectedCategory}の内訳`
+                }
+            }
+        }
+    });
 }
 
 /**
- * 店舗別支出グラフ
- * @param {Object[]} receipts 
+ * 店舗チャート (Bar)
  */
-export function drawStoreChart(receipts) {
+function drawStoreChart(receipts) {
     const canvas = document.getElementById('storeChart');
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
 
-    // 店舗別合計を計算
+    if (storeChartInstance) {
+        storeChartInstance.destroy();
+        storeChartInstance = null;
+    }
+
     const storeTotals = {};
-    receipts.forEach(receipt => {
-        storeTotals[receipt.store] = (storeTotals[receipt.store] || 0) + receipt.total;
+    receipts.forEach(r => {
+        const storeName = r.store || '不明';
+        storeTotals[storeName] = (storeTotals[storeName] || 0) + r.total;
     });
 
-    // トップ5を抽出
-    const sortedStores = Object.entries(storeTotals)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
+    // Sort and Top 5
+    const sorted = Object.entries(storeTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const labels = sorted.map(s => s[0]);
+    const data = sorted.map(s => s[1]);
 
-    if (sortedStores.length === 0) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#666';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('データがありません', canvas.width / 2, canvas.height / 2);
-        return;
-    }
-
-    const stores = sortedStores.map(item => item[0]);
-    const amounts = sortedStores.map(item => item[1]);
-
-    // キャンバスのクリア
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // グラフの設定
-    const barWidth = 40;
-    const spacing = 30;
-    const startX = 60;
-    const startY = canvas.height - 40;
-    const maxAmount = Math.max(...amounts);
-    const graphHeight = canvas.height - 80;
-
-    // バーの描画
-    for (let i = 0; i < amounts.length; i++) {
-        const barHeight = (amounts[i] / maxAmount) * graphHeight;
-        const x = startX + i * (barWidth + spacing);
-        const y = startY - barHeight;
-
-        // バーの描画
-        ctx.fillStyle = i % 2 === 0 ? '#4e54c8' : '#8f94fb';
-        ctx.fillRect(x, y, barWidth, barHeight);
-
-        // 金額の表示
-        ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(
-            `¥${amounts[i].toLocaleString()}`,
-            x + barWidth / 2,
-            y - 5
-        );
-
-        // 店舗名の表示（長すぎる場合は省略）
-        let storeName = stores[i];
-        if (storeName.length > 10) {
-            storeName = storeName.substring(0, 8) + '...';
+    storeChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '支出額',
+                data: data,
+                backgroundColor: '#4e54c8',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            indexAxis: 'y', // Horizontal Stack like view often better for long store names, or 'x' standard
+            plugins: {
+                legend: { display: false },
+                title: { display: false }
+            },
+            scales: {
+                x: { beginAtZero: true }
+            }
         }
+    });
+}
 
-        ctx.fillText(
-            storeName,
-            x + barWidth / 2,
-            startY + 20
-        );
+/**
+ * トレンドチャート (Line)
+ */
+function drawTrendChart(receipts, period) {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+
+    if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
     }
 
-    // 軸の描画
-    ctx.beginPath();
-    ctx.moveTo(startX - 10, startY);
-    ctx.lineTo(startX + amounts.length * (barWidth + spacing), startY);
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Daily Aggregation
+    // Create a map of all dates in the range to ensure continuity? 
+    // For simplicity, just aggregate dates present and sort.
+
+    // Better: Sort receipts by date
+    const sortedReceipts = [...receipts].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Aggregate by Date
+    const dailyTotals = {};
+
+    // If we want to show 0 for days without receipts, we need to generate the date range.
+    // For now, let's just plot the days we have data for, unless it looks weird.
+    // Actually, "Period Trend" assumes a timeline. It's better to verify the range.
+
+    sortedReceipts.forEach(r => {
+        const dateStr = r.date.split('T')[0]; // YYYY-MM-DD
+        dailyTotals[dateStr] = (dailyTotals[dateStr] || 0) + r.total;
+    });
+
+    const labels = Object.keys(dailyTotals);
+    const data = Object.values(dailyTotals);
+
+    trendChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '日次支出',
+                data: data,
+                borderColor: '#ef476f',
+                backgroundColor: 'rgba(239, 71, 111, 0.1)',
+                tension: 0.3, // Curve
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                title: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
 }
 
 /**
  * よく買う商品を更新
- * @param {Object[]} receipts 
  */
 export function updateTopProducts(receipts) {
     const container = document.getElementById('topProducts');
@@ -324,17 +381,11 @@ export function updateTopProducts(receipts) {
     // 商品名の出現回数をカウント
     const productCount = {};
     receipts.forEach(receipt => {
+        if (!receipt.items) return;
         receipt.items.forEach(item => {
             // 商品名を取得
-            let name;
-            let count = 1;
-
-            if (typeof item === 'object' && item.name) {
-                name = item.name;
-                count = item.count || 1;
-            } else {
-                name = item;
-            }
+            let name = item.name || (typeof item === 'string' ? item : '不明');
+            let count = item.count || 1;
 
             // 簡易的に商品名をキーにする
             const cleanItem = String(name).trim().substring(0, 30);
@@ -347,7 +398,7 @@ export function updateTopProducts(receipts) {
 
     // トップ10を抽出
     const topProducts = Object.entries(productCount)
-        .sort((a, b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1]) // Descending by count
         .slice(0, 10);
 
     if (topProducts.length === 0) {

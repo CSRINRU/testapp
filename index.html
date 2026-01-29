@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local AI Libraries -->
     <script src="lib/ort.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -306,6 +307,15 @@
                         <option value="year">今年</option>
                         <option value="custom">カスタム期間</option>
                     </select>
+                    <select id="analysisCategory" class="filter-select">
+                        <option value="all">すべてのカテゴリ</option>
+                        <option value="food">食料品</option>
+                        <option value="daily_goods">日用品</option>
+                        <option value="misc">雑貨</option>
+                        <option value="clothing">衣服</option>
+                        <option value="luxury">嗜好品</option>
+                        <option value="other">その他</option>
+                    </select>
                 </div>
             </div>
 
@@ -337,6 +347,12 @@
                 <h3><i class="fas fa-chart-bar"></i> 店舗別支出TOP5</h3>
                 <canvas id="storeChart"></canvas>
             </div>
+
+            <div class="chart-container">
+                <h3><i class="fas fa-chart-line"></i> 期間別推移</h3>
+                <canvas id="trendChart"></canvas>
+            </div>
+
 
             <div class="analysis-section">
                 <h3><i class="fas fa-shopping-basket"></i> よく買う商品</h3>
