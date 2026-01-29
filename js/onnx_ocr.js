@@ -65,7 +65,16 @@ class OnnxOCR {
         // Worker環境では相対パスはWorkerスクリプトからの相対になる
         // /models/... でルート指定が無難
         const response = await fetch('../models/ppocrv5/ppocrv5_dict.txt');
+        if (!response.ok) {
+            throw new Error(`Failed to load dictionary: ${response.status} ${response.statusText}`);
+        }
         const text = await response.text();
+
+        // HTMLが返ってきていないかチェック (404ページ対策)
+        if (text.trim().startsWith('<')) {
+            throw new Error('Dictionary file content appears to be HTML. Likely 404 or path issue.');
+        }
+
         // 行ごとに分割して配列にする
         this.keys = text.split('\n');
         // 最後が空行の場合があるので調整
