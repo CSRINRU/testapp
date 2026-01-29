@@ -159,7 +159,7 @@
                             <div class="control-row stacked">
                                 <span class="control-label">値: <span id="disp-detThresh">0.4</span></span>
                                 <input type="range" id="slider-detThresh" min="0.1" max="0.9" step="0.05" value="0.4">
-                                <p class="control-desc">テキスト領域とみなす確率の閾値です。</p>
+                                <p class="control-desc">テキスト領域とみなす確率の閾値です。低すぎるとノイズを拾い、高すぎると薄い文字を見逃します (推奨: 0.3-0.5)。</p>
                             </div>
                         </div>
 
@@ -171,7 +171,7 @@
                             <div class="control-row stacked">
                                 <span class="control-label">値: <span id="disp-boxThresh">0.6</span></span>
                                 <input type="range" id="slider-boxThresh" min="0.1" max="0.9" step="0.05" value="0.6">
-                                <p class="control-desc">検出された領域を確定させるための閾値です。</p>
+                                <p class="control-desc">検出された領域の確からしさ(平均スコア)の閾値です。ノイズ除去に効果的です (推奨: 0.5-0.7)。</p>
                             </div>
                         </div>
                     </div>
@@ -186,7 +186,7 @@
                             <div class="control-row stacked">
                                 <span class="control-label">値: <span id="disp-recThresh">0.6</span></span>
                                 <input type="range" id="slider-recThresh" min="0.1" max="1.0" step="0.05" value="0.6">
-                                <p class="control-desc">文字認識の信頼度がこれより低い場合は無視します。</p>
+                                <p class="control-desc">文字認識の信頼度がこれより低い場合は結果を破棄します。誤読を減らすのに有効です (推奨: 0.5-0.7)。</p>
                             </div>
                         </div>
                     </div>

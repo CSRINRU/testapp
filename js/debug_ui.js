@@ -56,9 +56,41 @@ export const DebugUI = {
                             ctx.lineTo(box[i].x, box[i].y);
                         }
                         ctx.closePath();
+
+                        // Main box in Lime
+                        ctx.strokeStyle = 'lime';
+                        ctx.lineWidth = 2;
                         ctx.stroke();
-                        // Optional: Fill
+
+                        // Orientation indicator (First edge 0-1) in Red
+                        // This indicates the "top" or main axis direction
+                        ctx.beginPath();
+                        ctx.moveTo(box[0].x, box[0].y);
+                        ctx.lineTo(box[1].x, box[1].y);
+                        ctx.strokeStyle = 'red';
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+
+                        ctx.stroke();
+
                         // ctx.fill(); 
+
+                        // Draw Padded Box (if available)
+                        if (block.paddedBox) {
+                            const pBox = block.paddedBox;
+                            ctx.beginPath();
+                            ctx.moveTo(pBox[0].x, pBox[0].y);
+                            for (let i = 1; i < pBox.length; i++) {
+                                ctx.lineTo(pBox[i].x, pBox[i].y);
+                            }
+                            ctx.closePath();
+
+                            ctx.strokeStyle = 'cyan';
+                            ctx.lineWidth = 1;
+                            ctx.setLineDash([5, 5]); // Dashed line
+                            ctx.stroke();
+                            ctx.setLineDash([]); // Reset
+                        }
                     } else {
                         // Fallback for old style box
                         ctx.strokeRect(box.x, box.y, box.w, box.h);

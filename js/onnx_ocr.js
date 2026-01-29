@@ -121,6 +121,13 @@ class OnnxOCR {
                     y: Math.round(p.y * scaleY)
                 }));
 
+                // Calculate Padded Box (for visualization)
+                const paddedBox = this.getPaddedBox(box);
+                const outPaddedBox = paddedBox.map(p => ({
+                    x: Math.round(p.x * scaleX),
+                    y: Math.round(p.y * scaleY)
+                }));
+
                 // Helper to get bounding rect for sorting
                 const xs = outBox.map(p => p.x);
                 const ys = outBox.map(p => p.y);
@@ -136,6 +143,7 @@ class OnnxOCR {
                     text,
                     score,
                     box: outBox, // 4 points
+                    paddedBox: outPaddedBox, // Padded area
                     // Metadata for sorting
                     centerY,
                     centerX,
@@ -290,6 +298,64 @@ class OnnxOCR {
         }
 
         return new ImageData(output, width, height);
+    }
+
+    getPaddedBox(box) {
+        // Calculate dimensions same as cropRotatedImage
+        const w1 = Math.hypot(box[1].x - box[0].x, box[1].y - box[0].y);
+        const w2 = Math.hypot(box[3].x - box[2].x, box[3].y - box[2].y);
+        const w = (w1 + w2) / 2;
+
+        const h1 = Math.hypot(box[3].x - box[0].x, box[3].y - box[0].y);
+        const h2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
+        const h = (h1 + h2) / 2;
+
+        const padding = Math.max(4, Math.round(Math.min(w, h) * 0.1));
+
+        // Center
+        const cx = (box[0].x + box[2].x) / 2;
+        const cy = (box[0].y + box[2].y) / 2;
+
+        // Angle (from top edge)
+        const angle = Math.atan2(box[1].y - box[0].y, box[1].x - box[0].x);
+
+        // Calculate unit vectors
+        const ux = Math.cos(angle);
+        const uy = Math.sin(angle);
+        const vx = -Math.sin(angle); // Perpendicular (90 deg counter-clockwise from x?) 
+        const vy = Math.cos(angle);
+        // Note: Canvas Y is down. Standard rotation...
+        // If angle is direction of 0->1. 
+        // 1->2 is usually +90deg (clockwise in screen coords?)
+        // Let's check: 0->1 is "Right". 1->2 is "Down" (y increases).
+        // 0->1 vector: (1, 0). angle 0.
+        // 1->2 vector: (0, 1). 
+        // If I use (-sin, cos) for (0, 1) -> (0, 1). correct.
+
+        // Half dimensions for padded box
+        const halfW = (w / 2) + padding;
+        const halfH = (h / 2) + padding;
+
+        // Corners: TL, TR, BR, BL
+        // TL: Center - halfW*u - halfH*v
+        // TR: Center + halfW*u - halfH*v
+        // BR: Center + halfW*u + halfH*v
+        // BL: Center - halfW*u + halfH*v
+        // Wait, "Top" is -v direction? 
+        // In screen coords, "Down" is +Y. 
+        // If 0-1 is Top edge, then center is below it.
+        // So 0-1 is at -halfH relative to Center?
+        // Let's verify direction. 
+        // Center is average. 0 is TL.
+        // Vector C->0 should be roughly (-halfW, -halfH).
+        // Let's use signs that match the relative position of box[0] to Center.
+
+        return [
+            { x: cx - halfW * ux - halfH * vx, y: cy - halfW * uy - halfH * vy }, // TL
+            { x: cx + halfW * ux - halfH * vx, y: cy + halfW * uy - halfH * vy }, // TR
+            { x: cx + halfW * ux + halfH * vx, y: cy + halfW * uy + halfH * vy }, // BR
+            { x: cx - halfW * ux + halfH * vx, y: cy - halfW * uy + halfH * vy }  // BL
+        ];
     }
 
     cropRotatedImage(image, box) {
@@ -481,11 +547,15 @@ class OnnxOCR {
                     const queue = [idx];
                     visited[idx] = 1;
 
+                    let scoreSum = 0;
+
                     while (queue.length > 0) {
                         const currIdx = queue.shift();
-                        const cy = Math.floor(currIdx / width);
                         const cx = currIdx % width;
+                        const cy = Math.floor(currIdx / width);
                         componentPoints.push({ x: cx, y: cy });
+
+                        scoreSum += mapData[currIdx];
 
                         // 8-neighbor connectivity
                         for (let dy = -1; dy <= 1; dy++) {
@@ -505,9 +575,13 @@ class OnnxOCR {
                     }
 
                     // 2. Filter small components
-                    if (componentPoints.length < this.detDbBoxThresh * 10) continue; // 簡易的な面積フィルタ
+                    if (componentPoints.length < 10) continue;
 
-                    // 3. Get Rotated Bounding Box (PCA)
+                    // 3. Score filter
+                    const meanScore = scoreSum / componentPoints.length;
+                    if (meanScore < this.detDbBoxThresh) continue;
+
+                    // 4. Get Rotated Bounding Box (PCA)
                     const box = this.getMinAreaRect(componentPoints);
                     // box is 4 points: [{x,y}, {x,y}, {x,y}, {x,y}]
 
