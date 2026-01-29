@@ -1,165 +1,203 @@
 
 import { getPreprocessedPreview } from './ocr.js';
+import { defaultOCRParams } from './constants.js';
 
-export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaultParams) {
-    const section = document.getElementById('preprocessing-section');
-    const processedCanvas = document.getElementById('prepProcessedCanvas');
-
-    // Controls
-    const sliderContrast = document.getElementById('slider-contrast');
-    const checkContrast = document.getElementById('check-contrast');
-    const dispContrast = document.getElementById('disp-contrast');
-
-    const checkSharpening = document.getElementById('check-sharpening');
-
-    const sliderLimitSide = document.getElementById('slider-limitSide');
-    const dispLimitSide = document.getElementById('disp-limitSide');
-
-    const sliderDetThresh = document.getElementById('slider-detThresh');
-    const dispDetThresh = document.getElementById('disp-detThresh');
-
-    const sliderBoxThresh = document.getElementById('slider-boxThresh');
-    const dispBoxThresh = document.getElementById('disp-boxThresh');
-
-    const sliderRecThresh = document.getElementById('slider-recThresh');
-    const dispRecThresh = document.getElementById('disp-recThresh');
-
-    const cancelBtn = document.getElementById('prepCancelBtn');
-    const analyzeBtn = document.getElementById('prepAnalyzeBtn');
-
-    if (!section || !processedCanvas) return;
-
+export const PreprocessingUI = {
     // State
-    let currentImageDataUrl = null;
-    let currentParams = { ...defaultParams };
-    let previewPending = false;
+    initialized: false,
+    currentImageDataUrl: null,
+    currentParams: { ...defaultOCRParams }, // Use imported default params as base
+    onAnalyze: null,
+    onCancel: null,
+    debounceTimer: null,
 
-    // Helpers
-    const bindSlider = (slider, display, paramName, needsPreview = false) => {
-        slider.addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            display.textContent = val;
-            currentParams[paramName] = val;
-            if (needsPreview) requestPreviewUpdate();
+    // UI Elements
+    elements: {},
+
+    init() {
+        if (this.initialized) return;
+
+        const section = document.getElementById('preprocessing-section');
+        const processedCanvas = document.getElementById('prepProcessedCanvas');
+
+        // Controls
+        this.elements = {
+            section,
+            processedCanvas,
+            sliderContrast: document.getElementById('slider-contrast'),
+            checkContrast: document.getElementById('check-contrast'),
+            dispContrast: document.getElementById('disp-contrast'),
+            checkSharpening: document.getElementById('check-sharpening'),
+            sliderLimitSide: document.getElementById('slider-limitSide'),
+            dispLimitSide: document.getElementById('disp-limitSide'),
+            sliderDetThresh: document.getElementById('slider-detThresh'),
+            dispDetThresh: document.getElementById('disp-detThresh'),
+            sliderBoxThresh: document.getElementById('slider-boxThresh'),
+            dispBoxThresh: document.getElementById('disp-boxThresh'),
+            sliderRecThresh: document.getElementById('slider-recThresh'),
+            dispRecThresh: document.getElementById('disp-recThresh'),
+            cancelBtn: document.getElementById('prepCancelBtn'),
+            analyzeBtn: document.getElementById('prepAnalyzeBtn'),
+            tabBtns: document.querySelectorAll('.prep-tab-btn'),
+            tabContents: document.querySelectorAll('.prep-tab-content')
+        };
+
+        if (!section || !processedCanvas) {
+            console.error('Preprocessing UI elements not found');
+            return;
+        }
+
+        this.bindEvents();
+        this.initialized = true;
+    },
+
+    bindEvents() {
+        // Helpers
+        const bindSlider = (slider, display, paramName, needsPreview = false) => {
+            if (!slider) return;
+            slider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                if (display) display.textContent = val;
+                this.currentParams[paramName] = val;
+                if (needsPreview) this.requestPreviewUpdate();
+            });
+        };
+
+        const bindCheckbox = (checkbox, paramName, needsPreview = false) => {
+            if (!checkbox) return;
+            checkbox.addEventListener('change', (e) => {
+                const val = e.target.checked;
+                this.currentParams[paramName] = val;
+                if (needsPreview) this.requestPreviewUpdate();
+            });
+        };
+
+        // Bindings
+        bindSlider(this.elements.sliderContrast, this.elements.dispContrast, 'preprocessContrast', true);
+        bindCheckbox(this.elements.checkContrast, 'enableContrast', true);
+        bindCheckbox(this.elements.checkSharpening, 'enableSharpening', true);
+        bindSlider(this.elements.sliderLimitSide, this.elements.dispLimitSide, 'limitSideLen', true);
+        bindSlider(this.elements.sliderDetThresh, this.elements.dispDetThresh, 'detDbThresh', false);
+        bindSlider(this.elements.sliderBoxThresh, this.elements.dispBoxThresh, 'detDbBoxThresh', false);
+        bindSlider(this.elements.sliderRecThresh, this.elements.dispRecThresh, 'recScoreThresh', false);
+
+        // Buttons
+        if (this.elements.cancelBtn) {
+            this.elements.cancelBtn.addEventListener('click', () => {
+                this.hide();
+                if (this.onCancel) this.onCancel();
+            });
+        }
+
+        if (this.elements.analyzeBtn) {
+            this.elements.analyzeBtn.addEventListener('click', () => {
+                this.hide();
+                // Return current params
+                if (this.onAnalyze) this.onAnalyze({ ...this.currentParams });
+            });
+        }
+
+        // Tab Switching
+        this.elements.tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetId = btn.getAttribute('data-target');
+
+                // Deactivate all
+                this.elements.tabBtns.forEach(b => b.classList.remove('active'));
+                this.elements.tabContents.forEach(c => c.classList.remove('active'));
+
+                // Activate target
+                btn.classList.add('active');
+                const targetContent = document.getElementById(targetId);
+                if (targetContent) targetContent.classList.add('active');
+            });
         });
-    };
+    },
 
-    const bindCheckbox = (checkbox, paramName, needsPreview = false) => {
-        checkbox.addEventListener('change', (e) => {
-            const val = e.target.checked;
-            currentParams[paramName] = val;
-            if (needsPreview) requestPreviewUpdate();
-        });
-    };
+    show(imageDataUrl, onAnalyze, onCancel, initialParams = null) {
+        if (!this.initialized) this.init();
 
-    // Tab Switching Logic
-    const tabBtns = document.querySelectorAll('.prep-tab-btn');
-    const tabContents = document.querySelectorAll('.prep-tab-content');
+        this.currentImageDataUrl = imageDataUrl;
+        this.onAnalyze = onAnalyze;
+        this.onCancel = onCancel;
 
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.getAttribute('data-target');
+        if (initialParams) {
+            this.currentParams = { ...initialParams };
+        }
+        // If no initial params provided, keep using previous or defaults if initialized differently. 
+        // Ideally we should reset to defaults if new session? 
+        // For now trusting caller or persistence.
 
-            // Deactivate all
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
-
-            // Activate target
-            btn.classList.add('active');
-            const targetContent = document.getElementById(targetId);
-            if (targetContent) targetContent.classList.add('active');
-        });
-    });
-
-    // Bindings
-    bindSlider(sliderContrast, dispContrast, 'preprocessContrast', true);
-    bindCheckbox(checkContrast, 'enableContrast', true);
-
-    bindCheckbox(checkSharpening, 'enableSharpening', true);
-
-    bindSlider(sliderLimitSide, dispLimitSide, 'limitSideLen', true);
-
-    bindSlider(sliderDetThresh, dispDetThresh, 'detDbThresh', false);
-    bindSlider(sliderBoxThresh, dispBoxThresh, 'detDbBoxThresh', false);
-    bindSlider(sliderRecThresh, dispRecThresh, 'recScoreThresh', false);
-
-    cancelBtn.addEventListener('click', () => {
-        hide();
-        if (onCancelCallback) onCancelCallback();
-    });
-
-    analyzeBtn.addEventListener('click', () => {
-        hide();
-        // Return current params
-        if (onAnalyzeCallback) onAnalyzeCallback(currentParams);
-    });
-
-    function show(imageDataUrl) {
-        currentImageDataUrl = imageDataUrl;
-        section.classList.remove('hidden');
+        this.elements.section.classList.remove('hidden');
         document.querySelector('.camera-container').classList.add('hidden');
 
-        // Init controls
-        sliderContrast.value = currentParams.preprocessContrast;
-        dispContrast.textContent = currentParams.preprocessContrast;
-        checkContrast.checked = currentParams.enableContrast;
+        // Init controls UI from params
+        this.updateControls();
 
-        checkSharpening.checked = currentParams.enableSharpening;
+        this.requestPreviewUpdate();
+    },
 
-        sliderLimitSide.value = currentParams.limitSideLen;
-        dispLimitSide.textContent = currentParams.limitSideLen;
+    updateControls() {
+        const p = this.currentParams;
+        const e = this.elements;
 
-        sliderDetThresh.value = currentParams.detDbThresh;
-        dispDetThresh.textContent = currentParams.detDbThresh;
+        if (e.sliderContrast) e.sliderContrast.value = p.preprocessContrast;
+        if (e.dispContrast) e.dispContrast.textContent = p.preprocessContrast;
+        if (e.checkContrast) e.checkContrast.checked = p.enableContrast;
 
-        sliderBoxThresh.value = currentParams.detDbBoxThresh;
-        dispBoxThresh.textContent = currentParams.detDbBoxThresh;
+        if (e.checkSharpening) e.checkSharpening.checked = p.enableSharpening;
 
-        sliderRecThresh.value = currentParams.recScoreThresh;
-        dispRecThresh.textContent = currentParams.recScoreThresh;
+        if (e.sliderLimitSide) e.sliderLimitSide.value = p.limitSideLen;
+        if (e.dispLimitSide) e.dispLimitSide.textContent = p.limitSideLen;
 
-        requestPreviewUpdate();
-    }
+        if (e.sliderDetThresh) e.sliderDetThresh.value = p.detDbThresh;
+        if (e.dispDetThresh) e.dispDetThresh.textContent = p.detDbThresh;
 
-    function hide() {
-        section.classList.add('hidden');
+        if (e.sliderBoxThresh) e.sliderBoxThresh.value = p.detDbBoxThresh;
+        if (e.dispBoxThresh) e.dispBoxThresh.textContent = p.detDbBoxThresh;
+
+        if (e.sliderRecThresh) e.sliderRecThresh.value = p.recScoreThresh;
+        if (e.dispRecThresh) e.dispRecThresh.textContent = p.recScoreThresh;
+    },
+
+    hide() {
+        if (this.elements.section) this.elements.section.classList.add('hidden');
         const camContainer = document.querySelector('.camera-container');
         if (camContainer) camContainer.classList.remove('hidden');
-    }
+    },
 
-    // Debounced Preview Update
-    let debounceTimer = null;
-    function requestPreviewUpdate() {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            updatePreview();
-        }, 300); // 300ms delay
-    }
+    requestPreviewUpdate() {
+        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        this.debounceTimer = setTimeout(() => {
+            this.updatePreview();
+        }, 300);
+    },
 
-    async function updatePreview() {
-        if (!currentImageDataUrl) return;
+    async updatePreview() {
+        if (!this.currentImageDataUrl || !this.elements.processedCanvas) return;
 
         try {
             // Workerへ前処理リクエスト
-            const imageBitmap = await getPreprocessedPreview(currentImageDataUrl, currentParams);
+            const imageBitmap = await getPreprocessedPreview(this.currentImageDataUrl, this.currentParams);
 
             // Canvasに描画
-            processedCanvas.width = imageBitmap.width;
-            processedCanvas.height = imageBitmap.height;
-            const ctx = processedCanvas.getContext('2d');
+            const cvs = this.elements.processedCanvas;
+            cvs.width = imageBitmap.width;
+            cvs.height = imageBitmap.height;
+            const ctx = cvs.getContext('2d');
             ctx.drawImage(imageBitmap, 0, 0);
 
-            // Close bitmap to free memory
+            // Close bitmap
             imageBitmap.close();
 
-            drawLimitFrame(ctx, processedCanvas.width, processedCanvas.height);
+            this.drawLimitFrame(ctx, cvs.width, cvs.height);
         } catch (e) {
             console.error('Preview Error:', e);
         }
-    }
+    },
 
-    function drawLimitFrame(ctx, w, h) {
-        const limit = currentParams.limitSideLen;
+    drawLimitFrame(ctx, w, h) {
+        const limit = this.currentParams.limitSideLen;
         const isDownscaling = Math.max(w, h) > limit;
 
         // 解像度テキストの描画
@@ -177,9 +215,7 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaul
         ctx.fillStyle = '#00ff00';
         ctx.fillText(text, 20, 20);
 
-
         if (isDownscaling) {
-            // 既にリサイズされているため、ここに来ることは論理的には少ないが念のため残す
             ctx.strokeStyle = 'red';
             ctx.lineWidth = 10;
             ctx.strokeRect(0, 0, w, h);
@@ -189,6 +225,5 @@ export function setupPreprocessingUI(onAnalyzeCallback, onCancelCallback, defaul
             ctx.strokeRect(0, 0, w, h);
         }
     }
+};
 
-    return { show };
-}

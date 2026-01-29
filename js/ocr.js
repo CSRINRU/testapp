@@ -1,7 +1,7 @@
 import { store } from './store.js';
-import { setupPreprocessingUI } from './preprocessing_ui.js';
+import { PreprocessingUI } from './preprocessing_ui.js';
 import { geminiService } from './gemini.js';
-import { CATEGORY_IDS } from './constants.js';
+import { CATEGORY_IDS, defaultOCRParams } from './constants.js';
 import { DebugUI } from './debug_ui.js';
 
 // Workerの初期化
@@ -45,16 +45,7 @@ function postWorkerMessage(type, payload, transferList = []) {
 // 初期化フラグ
 let isWorkerInitialized = false;
 
-// デフォルトパラメータ
-export const defaultOCRParams = {
-    limitSideLen: 2000,
-    detDbThresh: 0.4,
-    detDbBoxThresh: 0.6,
-    recScoreThresh: 0.6,
-    preprocessContrast: 1.3,
-    enableContrast: true,
-    enableSharpening: true
-};
+
 
 /**
  * OCRエンジンの初期化 (必要に応じて呼び出される)
@@ -142,7 +133,8 @@ export async function processImage(imageData, showReceiptModal) {
     // currentParamsを保持して解析時に渡す
     let currentParams = { ...defaultOCRParams };
 
-    const preprocessingFn = setupPreprocessingUI(
+    PreprocessingUI.show(
+        imageData,
         // Analyze Callback
         async (finalParams) => {
             if (finalParams) currentParams = finalParams;
@@ -151,7 +143,23 @@ export async function processImage(imageData, showReceiptModal) {
             try {
                 // OCR処理
                 const ocrResult = await processOCR(imageData, currentParams);
-                console.log('OCR認識結果:', ocrResult);
+
+                console.group('OCR認識結果詳細');
+                console.log('全体テキスト:', ocrResult.text);
+                console.log('抽出ブロック数:', ocrResult.blocks ? ocrResult.blocks.length : 0);
+                if (ocrResult.blocks && ocrResult.blocks.length > 0) {
+                    console.table(ocrResult.blocks.map(b => ({
+                        text: b.text,
+                        score: (b.score * 100).toFixed(1) + '%',
+                        x: b.box.x,
+                        y: b.box.y,
+                        w: b.box.w,
+                        h: b.box.h
+                    })));
+                } else {
+                    console.log('抽出されたブロックはありません');
+                }
+                console.groupEnd();
 
                 // Debug UIを表示
                 DebugUI.show(imageData, ocrResult, async () => {
@@ -170,11 +178,9 @@ export async function processImage(imageData, showReceiptModal) {
         () => {
             resetView();
         },
-        // Current Params Accessor (if needed, or pass defaults)
+        // Current Params (optional, if we want to reset or keep)
         defaultOCRParams
     );
-
-    preprocessingFn.show(imageData);
 }
 
 function resetView() {

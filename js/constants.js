@@ -83,3 +83,14 @@ MINOR_CATEGORY_DEFINITIONS.forEach(def => {
     }
 });
 
+
+// OCR Default Parameters
+export const defaultOCRParams = {
+    limitSideLen: 2000,
+    detDbThresh: 0.4,
+    detDbBoxThresh: 0.6,
+    recScoreThresh: 0.6,
+    preprocessContrast: 1.3,
+    enableContrast: true,
+    enableSharpening: true
+};
