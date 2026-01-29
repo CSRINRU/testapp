@@ -90,6 +90,7 @@ export const defaultOCRParams = {
     detDbThresh: 0.4,
     detDbBoxThresh: 0.6,
     recScoreThresh: 0.6,
+    paddingRatio: 0.1, // 文字領域のパディング率 (10%),
     preprocessContrast: 1.3,
     enableContrast: true,
     enableSharpening: true

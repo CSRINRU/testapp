@@ -16,6 +16,7 @@ class OnnxOCR {
         this.recImgH = 48; // 認識モデルの入力高さ (v4は48)
         this.recImgW = 320;
         this.recScoreThresh = 0.6; // 認識信頼度の閾値
+        this.paddingRatio = 0.1; // パディング率
 
         // Debug params
         this.preprocessContrast = 1.3;
@@ -310,7 +311,7 @@ class OnnxOCR {
         const h2 = Math.hypot(box[2].x - box[1].x, box[2].y - box[1].y);
         const h = (h1 + h2) / 2;
 
-        const padding = Math.max(4, Math.round(Math.min(w, h) * 0.1));
+        const padding = Math.max(4, Math.round(Math.min(w, h) * this.paddingRatio));
 
         // Center
         const cx = (box[0].x + box[2].x) / 2;
@@ -817,6 +818,7 @@ class OnnxOCR {
         if (typeof params.detDbThresh === 'number') this.detDbThresh = params.detDbThresh;
         if (typeof params.detDbBoxThresh === 'number') this.detDbBoxThresh = params.detDbBoxThresh;
         if (typeof params.recScoreThresh === 'number') this.recScoreThresh = params.recScoreThresh;
+        if (typeof params.paddingRatio === 'number') this.paddingRatio = params.paddingRatio;
         if (typeof params.preprocessContrast === 'number') this.preprocessContrast = params.preprocessContrast;
         if (typeof params.limitSideLen === 'number') this.limitSideLen = params.limitSideLen;
 

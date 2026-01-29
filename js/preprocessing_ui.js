@@ -36,6 +36,8 @@ export const PreprocessingUI = {
             dispBoxThresh: document.getElementById('disp-boxThresh'),
             sliderRecThresh: document.getElementById('slider-recThresh'),
             dispRecThresh: document.getElementById('disp-recThresh'),
+            sliderPadding: document.getElementById('slider-padding'),
+            dispPadding: document.getElementById('disp-padding'),
             cancelBtn: document.getElementById('prepCancelBtn'),
             analyzeBtn: document.getElementById('prepAnalyzeBtn'),
             tabBtns: document.querySelectorAll('.prep-tab-btn'),
@@ -80,6 +82,7 @@ export const PreprocessingUI = {
         bindSlider(this.elements.sliderDetThresh, this.elements.dispDetThresh, 'detDbThresh', false);
         bindSlider(this.elements.sliderBoxThresh, this.elements.dispBoxThresh, 'detDbBoxThresh', false);
         bindSlider(this.elements.sliderRecThresh, this.elements.dispRecThresh, 'recScoreThresh', false);
+        bindSlider(this.elements.sliderPadding, this.elements.dispPadding, 'paddingRatio', false);
 
         // Buttons
         if (this.elements.cancelBtn) {
@@ -158,6 +161,9 @@ export const PreprocessingUI = {
 
         if (e.sliderRecThresh) e.sliderRecThresh.value = p.recScoreThresh;
         if (e.dispRecThresh) e.dispRecThresh.textContent = p.recScoreThresh;
+
+        if (e.sliderPadding) e.sliderPadding.value = p.paddingRatio;
+        if (e.dispPadding) e.dispPadding.textContent = p.paddingRatio;
     },
 
     hide() {

@@ -174,6 +174,17 @@
                                 <p class="control-desc">検出された領域の確からしさ(平均スコア)の閾値です。ノイズ除去に効果的です (推奨: 0.5-0.7)。</p>
                             </div>
                         </div>
+                        <!-- Padding Ratio Card -->
+                        <div class="control-card">
+                            <div class="card-header">
+                                <i class="fas fa-expand-arrows-alt"></i> パディング率 (Padding Ratio)
+                            </div>
+                            <div class="control-row stacked">
+                                <span class="control-label">値: <span id="disp-padding">0.1</span></span>
+                                <input type="range" id="slider-padding" min="0.0" max="0.5" step="0.05" value="0.1">
+                                <p class="control-desc">検出領域に追加する余白の割合です。文字切れを防ぐために調整します (推奨: 0.1-0.2)。</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tab Content: Recognition -->
