@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-receipt-v3';
+const CACHE_NAME = 'smart-receipt-v4';
 const ASSETS = [
     './',
     './index.html',
@@ -91,27 +91,31 @@ self.addEventListener('fetch', (event) => {
             }
 
             // 4. Inject COOP/COEP headers for SharedArrayBuffer support (required for ONNX Runtime Web threaded)
-            if (event.request.mode === 'navigate') {
-                const newHeaders = new Headers(response.headers);
-                newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
-                newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+            // We can only recreate the response if it has a valid status (not opaque/0)
+            if (response && response.status >= 200 && response.status < 600) {
+                if (event.request.mode === 'navigate') {
+                    const newHeaders = new Headers(response.headers);
+                    newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
+                    newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
 
-                return new Response(response.body, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: newHeaders
-                });
-            } else {
-                // For subresources (JS, WASM, etc.), ensure CORP is set
-                const newHeaders = new Headers(response.headers);
-                newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
+                    return new Response(response.body, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: newHeaders
+                    });
+                } else {
+                    const newHeaders = new Headers(response.headers);
+                    newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
 
-                return new Response(response.body, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: newHeaders
-                });
+                    return new Response(response.body, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: newHeaders
+                    });
+                }
             }
+
+            return response;
         })()
     );
 });
