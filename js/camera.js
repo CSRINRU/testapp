@@ -28,6 +28,11 @@ export function setupCamera() {
         .then(stream => {
             video.srcObject = stream;
             cameraStream = stream;
+
+            // ビデオとオーバーレイを表示
+            video.classList.remove('hidden');
+            const overlay = document.getElementById('cameraOverlay');
+            if (overlay) overlay.classList.remove('hidden');
         })
         .catch(err => {
             console.error('カメラへのアクセスに失敗しました:', err);

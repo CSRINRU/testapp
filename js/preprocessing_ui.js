@@ -167,7 +167,7 @@ export const PreprocessingUI = {
         }
 
         this.elements.section.classList.remove('hidden');
-        document.querySelector('.camera-container').classList.add('hidden');
+        document.querySelector('.camera-container').classList.add('hidden-camera'); // Use consistent class
 
         // Init controls UI from params
         this.updateControls();
@@ -204,7 +204,10 @@ export const PreprocessingUI = {
     hide() {
         if (this.elements.section) this.elements.section.classList.add('hidden');
         const camContainer = document.querySelector('.camera-container');
-        if (camContainer) camContainer.classList.remove('hidden');
+        if (camContainer) {
+            camContainer.classList.remove('hidden');
+            camContainer.classList.remove('hidden-camera');
+        }
     },
 
     requestPreviewUpdate() {

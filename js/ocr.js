@@ -143,6 +143,15 @@ export async function processImage(imageData, showReceiptModal) {
         // Analyze Callback
         async (finalParams) => {
             if (finalParams) currentParams = finalParams;
+
+            // processingSectionを表示する前に、カメラコンテナを隠す
+            // (PreprocessingUI.hide()がカメラを表示状態に戻してしまうため)
+            const container = document.getElementById('camera-container');
+            if (container) {
+                container.classList.add('hidden-camera');
+                container.classList.add('hidden'); // 両方つけておく
+            }
+
             if (processingSection) processingSection.classList.remove('hidden');
 
             try {
@@ -200,10 +209,16 @@ function resetView() {
     const video = document.getElementById('cameraPreview');
     const overlay = document.getElementById('cameraOverlay');
     const prepSection = document.getElementById('preprocessing-section');
+    const container = document.getElementById('camera-container');
+
     if (prepSection) prepSection.classList.add('hidden');
     if (preview) preview.classList.add('hidden');
     if (video) video.classList.remove('hidden');
     if (overlay) overlay.classList.remove('hidden');
+    if (container) {
+        container.classList.remove('hidden');
+        container.classList.remove('hidden-camera');
+    }
 }
 
 async function processGemini(text, imageData, progressText, showReceiptModal, processingSection) {

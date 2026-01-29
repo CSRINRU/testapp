@@ -1,7 +1,7 @@
 import { store } from './store.js';
 import { formatDate } from './utils.js';
 import { saveToIndexedDB, saveReceipt, deleteReceipt, clearAllReceipts, loadReceipts } from './db.js';
-import { setupCamera, capturePhoto, handleImageUpload, updateModalImage } from './camera.js';
+import { setupCamera, capturePhoto, handleImageUpload, updateModalImage, stopCamera } from './camera.js';
 import { updateAnalysis } from './analysis.js';
 import { geminiService } from './gemini.js';
 import { MAJOR_CATEGORIES, MINOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS, MAJOR_CATEGORY_DISPLAY_NAMES } from './constants.js';
@@ -64,10 +64,26 @@ export function switchTab(tabId) {
     if (tabId === 'camera') {
         // setupCamera(); // 自動起動しないで待機画面を表示
         // カメラコンテナを非表示、開始画面を表示
+        // カメラコンテナを非表示、開始画面を表示
         const container = document.getElementById('camera-container');
         const startScreen = document.getElementById('camera-start-screen');
         if (container) container.classList.add('hidden-camera');
         if (startScreen) startScreen.classList.remove('hidden');
+
+        // 他のUI要素をリセット
+        const prepSection = document.getElementById('preprocessing-section');
+        if (prepSection) prepSection.classList.add('hidden');
+
+        const debugSection = document.getElementById('debug-ui-section');
+        if (debugSection) debugSection.classList.add('hidden');
+
+        const processingSection = document.getElementById('processingSection');
+        if (processingSection) processingSection.classList.add('hidden');
+
+        // ビデオ要素の表示を確実に復帰
+        const video = document.getElementById('cameraPreview');
+        if (video) video.classList.remove('hidden');
+
         stopCamera(); // 念のため停止
     } else if (tabId === 'analysis') {
         updateAnalysis();

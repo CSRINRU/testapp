@@ -106,12 +106,12 @@ export const DebugUI = {
             if (ocrResult.blocks) {
                 ocrResult.blocks.forEach(block => {
                     const div = document.createElement('div');
-                    div.className = 'p-2 border-b border-gray-700 text-sm flex justify-between';
+                    div.className = 'debug-text-item';
                     const spanText = document.createElement('span');
                     spanText.textContent = block.text;
                     const spanScore = document.createElement('span');
                     spanScore.textContent = `${Math.round(block.score * 100)}%`;
-                    spanScore.className = 'text-xs text-gray-400 ml-2';
+                    spanScore.className = 'debug-score';
                     div.appendChild(spanText);
                     div.appendChild(spanScore);
                     textList.appendChild(div);
@@ -139,10 +139,23 @@ export const DebugUI = {
 
             // To properly go "Back" to preprocessing would require keeping state.
             // For now, treat "Retry" as "Cancel" -> "Reset to Camera".
+            // Cancel logic: Hide debug, prep, processing, show camera
             const preview = document.getElementById('selectedImagePreview');
             const video = document.getElementById('cameraPreview');
             const overlay = document.getElementById('cameraOverlay');
+            const processingSection = document.getElementById('processingSection');
+            const prepSection = document.getElementById('preprocessing-section');
+            const cameraContainer = document.getElementById('camera-container');
+
             if (preview) preview.classList.add('hidden');
+            if (processingSection) processingSection.classList.add('hidden');
+            if (prepSection) prepSection.classList.add('hidden');
+
+            // Show Camera
+            if (cameraContainer) {
+                cameraContainer.classList.remove('hidden');
+                cameraContainer.classList.remove('hidden-camera');
+            }
             if (video) video.classList.remove('hidden');
             if (overlay) overlay.classList.remove('hidden');
 
