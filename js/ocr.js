@@ -4,45 +4,72 @@ import { geminiService } from './gemini.js';
 import { CATEGORY_IDS, defaultOCRParams } from './constants.js';
 import { DebugUI } from './debug_ui.js';
 
-// Workerの初期化
-// import.meta.url を使用して確実に正しいパスを解決する
-const worker = new Worker(new URL('ocr_worker.js', import.meta.url));
+// Worker instance
+let worker = null;
 
 // メッセージID管理
 let messageIdCounter = 0;
 const pendingPromises = new Map();
 
-// Workerからのメッセージハンドラ
-worker.onmessage = (e) => {
-    const { type, payload, error, messageId } = e.data;
+/**
+ * Workerを初期化・作成する
+ */
+async function createWorker() {
+    if (worker) return;
 
-    if (pendingPromises.has(messageId)) {
-        const { resolve, reject } = pendingPromises.get(messageId);
-        pendingPromises.delete(messageId);
+    try {
+        const workerUrl = new URL('ocr_worker.js', import.meta.url).href;
+        console.log('Attempting to load worker from:', workerUrl);
 
-        if (type === 'ERROR') {
-            reject(new Error(error));
-        } else {
-            resolve(payload);
+        const response = await fetch(workerUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch worker script: ${response.status} ${response.statusText}`);
         }
-    } else {
-        // console.warn('Received message for unknown ID:', messageId, e.data);
-    }
-};
 
-worker.onerror = (err) => {
-    console.error('Worker Error Details:', {
-        message: err.message,
-        filename: err.filename,
-        lineno: err.lineno,
-        colno: err.colno,
-        error: err.error
-    });
-    // alert('OCR Worker Error: ' + err.message); // Optional: alert user
-};
+        const scriptContent = await response.text();
+        const blob = new Blob([scriptContent], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        worker = new Worker(blobUrl);
+        console.log('Worker created successfully via Blob');
+
+        // Workerからのメッセージハンドラ設定
+        worker.onmessage = (e) => {
+            const { type, payload, error, messageId } = e.data;
+
+            if (pendingPromises.has(messageId)) {
+                const { resolve, reject } = pendingPromises.get(messageId);
+                pendingPromises.delete(messageId);
+
+                if (type === 'ERROR') {
+                    reject(new Error(error));
+                } else {
+                    resolve(payload);
+                }
+            }
+        };
+
+        worker.onerror = (err) => {
+            console.error('Worker Error Details:', {
+                message: err.message,
+                filename: err.filename,
+                lineno: err.lineno,
+                colno: err.colno,
+                error: err.error
+            });
+        };
+
+    } catch (e) {
+        console.error('Worker creation failed:', e);
+        throw e;
+    }
+}
 
 // Workerへのリクエスト送信ヘルパー
-function postWorkerMessage(type, payload, transferList = []) {
+async function postWorkerMessage(type, payload, transferList = []) {
+    if (!worker) {
+        await createWorker();
+    }
     return new Promise((resolve, reject) => {
         const messageId = messageIdCounter++;
         pendingPromises.set(messageId, { resolve, reject });
@@ -53,8 +80,6 @@ function postWorkerMessage(type, payload, transferList = []) {
 // 初期化フラグ
 let isWorkerInitialized = false;
 
-
-
 /**
  * OCRエンジンの初期化 (必要に応じて呼び出される)
  */
@@ -63,6 +88,11 @@ async function initOCR() {
 
     const progressText = document.getElementById('progressText');
     if (progressText) progressText.textContent = '初期化中...';
+
+    // Worker作成 (まだ無ければ)
+    if (!worker) {
+        await createWorker();
+    }
 
     await postWorkerMessage('INIT', {});
     isWorkerInitialized = true;
