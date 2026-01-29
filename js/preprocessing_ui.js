@@ -65,11 +65,15 @@ export const PreprocessingUI = {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Merge with defaults to ensure all keys exist
-                this.currentParams = { ...defaultOCRParams, ...parsed };
-                console.log('Loaded OCR params:', this.currentParams);
+                // check if parsed is valid object
+                if (parsed && typeof parsed === 'object') {
+                    this.currentParams = { ...defaultOCRParams, ...parsed };
+                    console.log('Loaded OCR params:', this.currentParams);
+                }
             }
         } catch (e) {
             console.warn('Failed to load OCR params:', e);
+            // Fallback to defaults is already handled by initial state
         }
     },
 

@@ -4,6 +4,7 @@ import { setupCamera, stopCamera } from './camera.js';
 
 import { updateAnalysis } from './analysis.js';
 import { setupTabNavigation, setupEventListeners, updateReceiptList, updateDataCount, showReceiptModal } from './ui.js';
+import { PreprocessingUI } from './preprocessing_ui.js';
 
 // DebugUIからアクセスできるようにグローバル公開
 window.showReceiptModal = showReceiptModal;
@@ -32,6 +33,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初期分析データの更新
     updateAnalysis();
+
+    // PreprocessingUIの初期化 (パラメータロードのため)
+    PreprocessingUI.init();
 });
 
 // アプリ終了時のカメラストリーム停止
