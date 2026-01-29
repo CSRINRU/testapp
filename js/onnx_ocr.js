@@ -33,7 +33,7 @@ class OnnxOCR {
 
         try {
             // WASMパス設定
-            ort.env.wasm.wasmPaths = '/lib/';
+            ort.env.wasm.wasmPaths = '../lib/';
 
             // 文字コード表の読み込み
             await this.loadKeys();
@@ -45,10 +45,10 @@ class OnnxOCR {
             };
 
             console.log('Loading detection model...');
-            this.detSession = await ort.InferenceSession.create('/models/ppocrv5/det/det.onnx', sessionOptions);
+            this.detSession = await ort.InferenceSession.create('../models/ppocrv5/det/det.onnx', sessionOptions);
 
             console.log('Loading recognition model...');
-            this.recSession = await ort.InferenceSession.create('/models/ppocrv5/rec/rec.onnx', sessionOptions);
+            this.recSession = await ort.InferenceSession.create('../models/ppocrv5/rec/rec.onnx', sessionOptions);
 
             this.isInitialized = true;
             console.log('OCR Models initialized successfully');
