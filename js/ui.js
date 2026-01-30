@@ -479,7 +479,12 @@ export function showReceiptModal(receiptData) {
 
     // モーダルを表示
     const modal = document.getElementById('receiptModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) {
+        modal.classList.remove('hidden');
+        // スクロール位置を一番上にリセット
+        const content = modal.querySelector('.modal-content');
+        if (content) content.scrollTop = 0;
+    }
 }
 
 /**
