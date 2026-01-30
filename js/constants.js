@@ -171,11 +171,11 @@ MINOR_CATEGORY_DEFINITIONS.forEach(def => {
 // OCR Default Parameters
 export const defaultOCRParams = {
     limitSideLen: 2000,
-    detDbThresh: 0.4,
-    detDbBoxThresh: 0.6,
-    recScoreThresh: 0.6,
-    paddingRatio: 0.1, // 文字領域のパディング率 (10%),
-    preprocessContrast: 1.3,
+    detDbThresh: 0.25,
+    detDbBoxThresh: 0.3,
+    recScoreThresh: 0.45,
+    paddingRatio: 0.35, // 文字領域のパディング率 (35%)
+    preprocessContrast: 0.8,
     enableContrast: true,
-    enableSharpening: true
+    enableSharpening: false
 };
