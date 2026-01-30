@@ -79,6 +79,10 @@ export function switchTab(tabId) {
         const processingSection = document.getElementById('processingSection');
         if (processingSection) processingSection.classList.add('hidden');
 
+        // Gemini Preview UIを隠す (追加)
+        const geminiPreviewSection = document.getElementById('gemini-preview-section');
+        if (geminiPreviewSection) geminiPreviewSection.classList.add('hidden');
+
         // ビデオ要素の表示を確実に復帰
         const video = document.getElementById('cameraPreview');
         if (video) video.classList.remove('hidden');

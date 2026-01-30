@@ -258,39 +258,40 @@
                     </button>
                 </div>
             </div>
-        </div>
 
-        <!-- Gemini Preview Section (New) -->
-        <div id="gemini-preview-section" class="preprocessing-section hidden">
-            <div class="section-header">
-                <h3><i class="fas fa-brain"></i> Gemini AI 解析プレビュー</h3>
-            </div>
+            <!-- Gemini Preview Section (New) -->
+            <div id="gemini-preview-section" class="preprocessing-section hidden">
+                <div class="section-header">
+                    <h3><i class="fas fa-brain"></i> Gemini AI 解析プレビュー</h3>
+                </div>
 
-            <div class="preprocessing-content">
-                <div class="preprocessing-preview-single">
-                    <label>解析対象画像</label>
-                    <div class="canvas-container" style="position: relative; width: 100%;">
-                        <canvas id="geminiPreviewCanvas"></canvas>
+                <div class="preprocessing-content">
+                    <div class="preprocessing-preview-single">
+                        <label>解析対象画像</label>
+                        <div class="canvas-container" style="position: relative; width: 100%;">
+                            <canvas id="geminiPreviewCanvas"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="control-card">
+                        <div class="card-header">
+                            <i class="fas fa-compress"></i> 画像リサイズ設定
+                        </div>
+                        <div class="control-row stacked">
+                            <span class="control-label">最大辺長: <span id="gemini-disp-limitSide">1600</span>px</span>
+                            <input type="range" id="gemini-slider-limitSide" min="800" max="3200" step="100"
+                                value="1600">
+                            <p class="control-desc">送信する画像のサイズを調整します。大きいほど高画質ですが通信量が増えます。</p>
+                        </div>
                     </div>
                 </div>
 
-                <div class="control-card">
-                    <div class="card-header">
-                        <i class="fas fa-compress"></i> 画像リサイズ設定
-                    </div>
-                    <div class="control-row stacked">
-                        <span class="control-label">最大辺長: <span id="gemini-disp-limitSide">1600</span>px</span>
-                        <input type="range" id="gemini-slider-limitSide" min="800" max="3200" step="100" value="1600">
-                        <p class="control-desc">送信する画像のサイズを調整します。大きいほど高画質ですが通信量が増えます。</p>
-                    </div>
+                <div class="preprocessing-actions">
+                    <button id="geminiPreviewCancelBtn" class="btn btn-secondary">キャンセル</button>
+                    <button id="geminiPreviewSendBtn" class="btn btn-primary btn-large">
+                        <i class="fas fa-paper-plane"></i> Geminiへ送信 (解析開始)
+                    </button>
                 </div>
-            </div>
-
-            <div class="preprocessing-actions">
-                <button id="geminiPreviewCancelBtn" class="btn btn-secondary">キャンセル</button>
-                <button id="geminiPreviewSendBtn" class="btn btn-primary btn-large">
-                    <i class="fas fa-paper-plane"></i> Geminiへ送信 (解析開始)
-                </button>
             </div>
         </div>
 

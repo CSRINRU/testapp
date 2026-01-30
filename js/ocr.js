@@ -251,9 +251,11 @@ function resetView() {
     const video = document.getElementById('cameraPreview');
     const overlay = document.getElementById('cameraOverlay');
     const prepSection = document.getElementById('preprocessing-section');
+    const geminiSection = document.getElementById('gemini-preview-section'); // 追加
     const container = document.getElementById('camera-container');
 
     if (prepSection) prepSection.classList.add('hidden');
+    if (geminiSection) geminiSection.classList.add('hidden'); // 追加
     if (preview) preview.classList.add('hidden');
     if (video) video.classList.remove('hidden');
     if (overlay) overlay.classList.remove('hidden');
