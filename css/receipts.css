@@ -1,0 +1,344 @@
+/* Receipt List */
+.receipt-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+}
+
+.receipt-item {
+    background-color: var(--surface-color);
+    border-radius: var(--radius-lg);
+    padding: 10px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.receipt-item:active {
+    transform: scale(0.98);
+    background-color: var(--background-color);
+}
+
+.receipt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0px;
+}
+
+.receipt-store {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: auto;
+}
+
+.receipt-date {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    white-space: nowrap;
+    margin-left: 8px;
+}
+
+.receipt-category {
+    display: inline-block;
+    padding: 4px 10px;
+    background-color: var(--background-color);
+    color: var(--primary-color);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+}
+
+.receipt-total {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: var(--spacing-xs);
+    font-feature-settings: "tnum";
+}
+
+.receipt-items {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+    max-height: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.receipt-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: var(--spacing-sm);
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--spacing-sm);
+}
+
+.action-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    cursor: pointer;
+    background-color: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: center;
+}
+
+.edit-btn {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.delete-btn {
+    background-color: #ffebee;
+    color: #d32f2f;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #999;
+}
+
+.empty-state i {
+    margin-bottom: 1rem;
+}
+
+/* アイテム編集行のスタイル */
+.items-container {
+    max-height: 55vh;
+    /* Increased from 400px to dynamic viewport height */
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    padding: 0;
+    /* Remove padding for edge-to-edge feel */
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    background: var(--surface-color);
+}
+
+.items-header-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 40px;
+    gap: 4px;
+    /* Reduced from 10px */
+    padding: 6px 4px;
+    /* Reduced from 8px 10px */
+    font-weight: bold;
+    font-size: 0.8rem;
+    /* Slightly smaller */
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    /* Thinner border */
+    margin-bottom: 4px;
+    /* Reduced from 8px */
+    background-color: var(--surface-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.item-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 40px;
+    gap: 4px;
+    /* Reduced from 10px */
+    margin-bottom: 4px;
+    /* Reduced from 8px */
+    align-items: center;
+    background: var(--surface-color);
+    padding: 4px 2px;
+    /* Reduced from 8px 5px */
+    border-radius: var(--radius-sm);
+    transition: background-color 0.2s;
+}
+
+.item-row:hover {
+    background-color: var(--background-color);
+}
+
+.item-row input,
+.item-row select {
+    padding: 6px;
+    /* Reduced from 8px */
+    font-size: 0.85rem;
+    /* Slightly smaller */
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    width: 100%;
+    transition: border-color 0.2s;
+    height: 36px;
+    /* Fixed height for consistency */
+}
+
+.item-row input:focus,
+.item-row select:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.item-row .btn-danger {
+    padding: 0;
+    width: 32px;
+    /* Smaller button */
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    margin: 0 auto;
+    background-color: #fee2e2;
+    color: #ef4444;
+    transition: all 0.2s;
+    box-shadow: none;
+    /* Remove shadow for flat look in dense list */
+}
+
+.item-row .btn-danger:hover {
+    background-color: #ef5350;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* スマホ最適化 */
+@media (max-width: 480px) {
+    .items-header-row {
+        display: none;
+        /* スマホではヘッダー隠す */
+    }
+
+    .item-row {
+        grid-template-columns: 1fr 1fr 40px;
+        grid-template-rows: auto auto auto;
+        grid-template-areas:
+            "name name name"
+            "major minor minor"
+            "amount amount delete";
+        gap: 4px;
+        background: #58585809;
+        padding: 8px;
+        border: 1px solid #00000010;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        margin-bottom: 7px;
+    }
+
+    .item-name {
+        grid-area: name;
+        font-weight: bold;
+        padding: 6px !important;
+    }
+
+    .item-major-category {
+        grid-area: major;
+    }
+
+    .item-minor-category {
+        grid-area: minor;
+    }
+
+    .item-amount {
+        grid-area: amount;
+        font-size: 1.1rem !important;
+        font-weight: 500;
+        text-align: right;
+    }
+
+    .delete-item-btn {
+        grid-area: delete;
+        width: 40px !important;
+        height: 40px !important;
+        margin-top: 0;
+    }
+
+    /* プレースホルダーが見やすいように調整 */
+    .item-row input,
+    .item-row select {
+        background-color: #fdfdfd;
+        height: auto;
+        /* タッチしやすい高さ */
+    }
+}
+
+/* Receipt Details Modal Customizations */
+.form-group-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 5px;
+}
+
+.form-group-horizontal label {
+    width: 70px;
+    margin-bottom: 0;
+    text-align: right;
+    flex-shrink: 0;
+    color: #999;
+    font-size: 0.85rem;
+}
+
+.form-group-horizontal input {
+    flex: 1;
+    color: #555;
+    font-size: 0.9rem;
+    padding: 4px;
+    border: 1px solid #eee;
+}
+
+.total-amount-group {
+    width: 85%;
+    margin: 0 auto;
+    background-color: #fff0f0;
+    padding: 4px;
+    border-radius: var(--radius-md);
+    text-align: left;
+    margin-bottom: 10px;
+    border: 1px solid #ffdcdc;
+    margin-top: 10px;
+}
+
+.total-amount-group label {
+    margin-left: 12px;
+    font-size: 0.85rem;
+    color: #999;
+    margin-bottom: 0px;
+    display: block;
+}
+
+.total-input-wrapper {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px;
+}
+
+.total-amount-group input {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #d32f2f;
+    text-align: center;
+    border: none;
+    background: transparent;
+    width: auto;
+    padding: 0;
+    max-width: 200px;
+}
+
+.currency-unit {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #d32f2f;
+}
+
+.total-amount-group input:focus {
+    outline: none;
+    border-bottom: 2px solid #d32f2f;
+}
