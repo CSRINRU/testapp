@@ -105,48 +105,148 @@ ${text}
             const parsedData = JSON.parse(jsonString);
 
             // カテゴリをIDに変換してマッピング
-            if (parsedData.items && Array.isArray(parsedData.items)) {
-                parsedData.items.forEach(item => {
-                    // 大カテゴリの変換 (日本語 -> ID)
-                    const majorName = item.major_category;
-                    if (MAJOR_CATEGORY_NAME_TO_ID[majorName]) {
-                        item.major_category = MAJOR_CATEGORY_NAME_TO_ID[majorName];
-                    } else {
-                        item.major_category = CATEGORY_IDS.OTHER; // マッチしない場合はその他
-                    }
-
-                    // 小カテゴリの変換 (日本語 -> ID)
-                    const minorName = item.minor_category;
-                    // 部分一致も含めて辞書検索するか、完全一致のみか。
-                    // Geminiは指示通りに出す傾向があるため、まずは完全一致 or 辞書のキーに含まれるかで判断
-                    // ここでは辞書のキーと完全一致、もしくは辞書のキーがGemini出力に含まれるかを簡易チェック
-
-                    let minorId = 'other_minor'; // デフォルト
-
-                    if (MINOR_CATEGORY_DICTIONARY[minorName]) {
-                        minorId = MINOR_CATEGORY_DICTIONARY[minorName];
-                    } else {
-                        // 辞書にない場合、辞書のキーを含んでいるか検索 (例: "新鮮野菜" -> "野菜"マッチ)
-                        for (const [key, id] of Object.entries(MINOR_CATEGORY_DICTIONARY)) {
-                            if (minorName.includes(key)) {
-                                minorId = id;
-                                break;
-                            }
-                        }
-                    }
-
-                    // IDをセット
-                    item.minor_category = minorId;
-
-                    // 表示用テキストはUI側で解決するため、ここではIDのみ保持 (あるいはUIの都合で変換しておくか？)
-                    // 要件: "データの管理はID化" -> ここではIDにする
-                });
-            }
+            this.mapCategories(parsedData);
 
             return parsedData;
         } catch (error) {
             console.error('Gemini API request failed:', error);
             throw error;
+        }
+    }
+
+    /**
+     * 画像からレシート情報を構造化する (Multimodal)
+     * @param {string} imageDataBase64 Base64 Data URL (e.g. data:image/jpeg;base64,...)
+     * @returns {Promise<Object>} 構造化されたデータ
+     */
+    async structureReceiptFromImage(imageDataBase64) {
+        if (!this.apiKey) {
+            throw new Error('Gemini APIキーが設定されていません。設定画面でキーを入力してください。');
+        }
+
+        // Base64ヘッダーを削除
+        const base64Data = imageDataBase64.replace(/^data:image\/\w+;base64,/, "");
+        const mimeTypeMatch = imageDataBase64.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : "image/jpeg";
+
+        const validCategories = MAJOR_CATEGORIES.join(', ');
+
+        const prompt = `
+このレシート画像を解析し、以下の情報をJSON形式で出力してください。
+各項目を正確に読み取り、誤字があれば文脈から修正してください。
+
+出力JSONフォーマット:
+{
+  "store": "店舗名（不明な場合は「不明」）",
+  "date": "YYYY-MM-DD（不明な場合は今日の日付）",
+  "total": 数値（合計金額）,
+  "items": [
+    {
+      "name": "商品名",
+      "count": 数値（個数、不明な場合は1）,
+      "amount": 数値（商品の単価×個数の合計金額）,
+      "major_category": "大カテゴリ（後述のリストから選択）",
+      "minor_category": "小カテゴリ（具体的な分類、例: 野菜、肉、文具、など）"
+    }
+  ]
+}
+
+大カテゴリの選択肢: ${validCategories}
+※これ以外の値を大カテゴリに入れないでください。判別不能な場合は「その他」にしてください。
+`;
+
+        const body = {
+            contents: [{
+                parts: [
+                    { text: prompt },
+                    {
+                        inline_data: {
+                            mime_type: mimeType,
+                            data: base64Data
+                        }
+                    }
+                ]
+            }],
+            generationConfig: {
+                response_mime_type: "application/json"
+            }
+        };
+
+        try {
+            const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Gemini API Error: ${errorData.error?.message || response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log("Gemini Vision Response Data:", data);
+
+            if (!data.candidates || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0].text) {
+                throw new Error('Gemini APIからの応答が不正です。');
+            }
+
+            const rawText = data.candidates[0].content.parts[0].text;
+            console.log("Gemini Extracted JSON:", rawText);
+
+            // JSON抽出
+            const jsonStartIndex = rawText.indexOf('{');
+            const jsonEndIndex = rawText.lastIndexOf('}');
+            let jsonString = rawText;
+            if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+                jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1);
+            }
+
+            const parsedData = JSON.parse(jsonString);
+
+            // カテゴリ変換ロジック (structureReceiptと同じ)
+            this.mapCategories(parsedData);
+
+            return parsedData;
+
+        } catch (error) {
+            console.error('Gemini Vision API request failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * データ内のカテゴリ名をIDに変換するヘルパー
+     */
+    mapCategories(data) {
+        if (data.items && Array.isArray(data.items)) {
+            data.items.forEach(item => {
+                // 大カテゴリ
+                const majorName = item.major_category;
+                if (MAJOR_CATEGORY_NAME_TO_ID[majorName]) {
+                    item.major_category = MAJOR_CATEGORY_NAME_TO_ID[majorName];
+                } else {
+                    item.major_category = CATEGORY_IDS.OTHER;
+                }
+
+                // 小カテゴリ
+                const minorName = item.minor_category;
+                let minorId = 'other_minor';
+
+                if (MINOR_CATEGORY_DICTIONARY[minorName]) {
+                    minorId = MINOR_CATEGORY_DICTIONARY[minorName];
+                } else {
+                    for (const [key, id] of Object.entries(MINOR_CATEGORY_DICTIONARY)) {
+                        if (minorName.includes(key)) {
+                            minorId = id;
+                            break;
+                        }
+                    }
+                }
+                item.minor_category = minorId;
+            });
         }
     }
 }

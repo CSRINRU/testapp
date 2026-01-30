@@ -1,4 +1,4 @@
-// import { AppState } from './state.js'; // REMOVED: No longer using global AppState for DB connection
+// import { AppState } from './state.js'; // 削除: DB接続でグローバルなAppStateを使用しなくなったため
 
 // モジュールレベル変数としてDB接続を保持 (Service Pattern)
 let db = null;
@@ -14,7 +14,7 @@ export async function initDatabase() {
         };
 
         request.onsuccess = () => {
-            db = request.result; // Local variable assignment
+            db = request.result; // DBインスタンスを保持
             console.log('データベースをオープンしました');
             resolve();
         };
@@ -88,37 +88,12 @@ export async function loadReceipts(updateReceiptList, updateDataCount) {
 
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
-            // AppState.receipts = request.result || []; // REMOVED: Controlled by caller/Store now
-            // The caller (main.js) should handle updating the Store.
-            // But to keep signature compatible for now, we return data.
-            // Ideally loadReceipts should just return data.
-            // Keeping existing callback pattern but removing direct State mutation inside DB module if possible,
-            // BUT existing code calls 'updateReceiptList' which might rely on global state.
-            // For this step, I will return the data and let the caller handling it, 
-            // OR I should import 'store' here and update it?
-            // "Single responsibility": DB module should just fetch data.
-            // But 'loadReceipts' name implies it does everything.
-            // I will return the result and let main.js update the store.
-
-            // However, looking at 'main.js', it calls 'loadReceipts(updateReceiptList, updateDataCount)'.
-            // And 'updateReceiptList' in 'ui.js' probably reads from AppState/Store.
-            // So we MUST update the Store here OR change main.js to update the store.
-            // Plan said: "Refactor js/main.js to use the new store".
-            // So I should import 'store' here and set it, OR return it.
-            // Modifying 'loadReceipts' to return data is cleaner but requires changing call sites.
-            // Let's import store here to minimize breakage for now, or just return data and have main.js update store.
-            // Let's decide to import 'store' here to fulfill "setReceipts" action.
-
-            // Wait, pure DB module shouldn't import UI store ideally.
-            // But keeping it simple: 'loadReceipts' is a business logic function here.
-
-            // I'll make it return the receipts, and main.js will set them to store.
-
+            // Storeの更新は呼び出し元(main.js等)の責任とするため、ここではデータ取得結果を返すのみとする。
             const receipts = request.result || [];
             // 画像データはメモリに展開しない (廃止対応)
             receipts.forEach(r => r.image = null);
 
-            // Returning receipts so caller can update store
+            // 呼び出し元でStoreを更新できるようにデータを返す
             resolve(receipts);
         };
     });
@@ -143,12 +118,8 @@ export async function saveReceipt(receipt, updateReceiptList, updateDataCount, u
 
         request.onerror = () => reject(request.error);
         request.onsuccess = async () => {
-            // await loadReceipts(updateReceiptList, updateDataCount); // Recursive/Circular dependency if we use store?
-            // The proper way is: save to DB -> successful -> add/update in Store -> UI updates via subscription.
-            // But for now, we want to maintain the specific callbacks if passed.
-            // I will simply resolve here, and let the caller handle UI updates/reloading.
-            // The original code re-loaded everything. Structure is poor.
-            // I will resolve, and let caller handle.
+            // 適切なUI更新フロー: DB保存 -> 成功 -> Store更新 -> UI反映
+            // 現状は呼び出し元でUI更新やリロードを制御しているため、ここでは解決のみ行う。
             resolve();
         };
     });
@@ -171,7 +142,7 @@ export async function deleteReceipt(id, updateReceiptList, updateDataCount, upda
 
         request.onerror = () => reject(request.error);
         request.onsuccess = async () => {
-            // Same as saveReceipt, just resolve.
+            // saveReceiptと同様、解決のみ行う
             resolve();
         };
     });

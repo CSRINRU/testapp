@@ -1,5 +1,6 @@
 import { store } from './store.js';
 import { PreprocessingUI } from './preprocessing_ui.js';
+import { GeminiPreviewUI } from './gemini_preview_ui.js';
 import { geminiService } from './gemini.js';
 import { CATEGORY_IDS, defaultOCRParams } from './constants.js';
 import { DebugUI } from './debug_ui.js';
@@ -113,7 +114,7 @@ export async function processOCR(imageData, params = null) {
 export async function processImage(imageData, showReceiptModal) {
     store.setCurrentImageData(imageData);
 
-    // Make sure camera container is visible and start screen is hidden
+    // カメラコンテナを表示し、開始画面を隠す
     const container = document.getElementById('camera-container');
     const startScreen = document.getElementById('camera-start-screen');
     if (container) container.classList.remove('hidden-camera');
@@ -138,6 +139,46 @@ export async function processImage(imageData, showReceiptModal) {
     // 解析用パラメータの保持
     let currentParams = { ...defaultOCRParams };
 
+    // OCRモードに基づいて分岐
+    const ocrMethod = store.state.currentOcrMethod;
+
+    if (ocrMethod === 'gemini') {
+        GeminiPreviewUI.show(
+            imageData,
+            // Send Callback
+            async (resizedImageData) => {
+                const loadingSection = document.getElementById('processingSection');
+                const progressText = document.getElementById('progressText');
+                const progressFill = document.getElementById('progressFill');
+
+                if (loadingSection) loadingSection.classList.remove('hidden');
+                if (progressText) progressText.textContent = 'Gemini AIで解析中...';
+                if (progressFill) progressFill.style.width = '50%';
+
+                try {
+                    // Gemini API呼び出し
+                    const receiptData = await geminiService.structureReceiptFromImage(resizedImageData);
+
+                    if (loadingSection) loadingSection.classList.add('hidden');
+
+                    // 結果確認・編集モーダルを表示
+                    showReceiptModal(receiptData);
+                } catch (error) {
+                    console.error('Gemini Analysis Failed:', error);
+                    alert('Gemini解析エラー: ' + error.message);
+                    if (loadingSection) loadingSection.classList.add('hidden');
+                    resetView();
+                }
+            },
+            // Cancel Callback
+            () => {
+                resetView();
+            }
+        );
+        return;
+    }
+
+    // Local OCR Flow
     PreprocessingUI.show(
         imageData,
         // Analyze Callback
@@ -154,6 +195,8 @@ export async function processImage(imageData, showReceiptModal) {
 
             if (processingSection) processingSection.classList.remove('hidden');
 
+
+            // Local OCRモード (既存フロー)
             try {
                 // OCR処理
                 const ocrResult = await processOCR(imageData, currentParams);
@@ -198,7 +241,6 @@ export async function processImage(imageData, showReceiptModal) {
         () => {
             resetView();
         },
-        // 現在のパラメータ
         // 現在のパラメータ
         null
     );

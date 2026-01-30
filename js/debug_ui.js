@@ -1,7 +1,7 @@
 
 export const DebugUI = {
     setup() {
-        // Initial setup if needed, but show() handles most dynamic content
+        // 初期設定が必要な場合はここに記述するが、動的なコンテンツの多くはshow()で扱われる
     },
 
     show(imageData, ocrResult, onContinue) {
@@ -18,15 +18,14 @@ export const DebugUI = {
             return;
         }
 
-        // Show section
+        // セクションを表示
         debugSection.classList.remove('hidden');
 
-        // Draw Image and Boxes
+        // 画像と矩形を描画
         const ctx = canvas.getContext('2d');
         const img = new Image();
         img.onload = () => {
-            // Adjust canvas size to fit window but maintain aspect ratio
-            // Or simple approach: match image size but scale with CSS
+            // キャンバスサイズを画像サイズに合わせる (表示サイズはCSSで調整)
             canvas.width = img.width;
             canvas.height = img.height;
 
@@ -39,17 +38,17 @@ export const DebugUI = {
                     const { box, text, score } = block;
                     // box: [{x,y}, {x,y}, {x,y}, {x,y}] or {x,y,w,h} (fallback)
 
-                    // Color based on confidence (optional)
+                    // 信頼度に基づいて色分け (オプション)
                     if (score > 0.8) {
                         ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
                         ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
                     } else {
-                        ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'; // Orange
+                        ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'; // オレンジ
                         ctx.fillStyle = 'rgba(255, 165, 0, 0.2)';
                     }
 
                     if (Array.isArray(box)) {
-                        // Rotated Box (Polygon)
+                        // 回転した矩形 (ポリゴン)
                         ctx.beginPath();
                         ctx.moveTo(box[0].x, box[0].y);
                         for (let i = 1; i < box.length; i++) {
@@ -57,13 +56,13 @@ export const DebugUI = {
                         }
                         ctx.closePath();
 
-                        // Main box in Lime
+                        // メインの矩形をライム色で描画
                         ctx.strokeStyle = 'lime';
                         ctx.lineWidth = 2;
                         ctx.stroke();
 
-                        // Orientation indicator (First edge 0-1) in Red
-                        // This indicates the "top" or main axis direction
+                        // 向きを示すインジケータ (最初の辺 0-1) を赤色で描画
+                        // これにより「上」方向または主軸方向を示す
                         ctx.beginPath();
                         ctx.moveTo(box[0].x, box[0].y);
                         ctx.lineTo(box[1].x, box[1].y);
@@ -92,7 +91,7 @@ export const DebugUI = {
                             ctx.setLineDash([]); // Reset
                         }
                     } else {
-                        // Fallback for old style box
+                        // 旧スタイルの矩形用フォールバック
                         ctx.strokeRect(box.x, box.y, box.w, box.h);
                     }
                 });
@@ -100,7 +99,7 @@ export const DebugUI = {
         };
         img.src = imageData;
 
-        // Populate Text List
+        // テキストリストを作成
         if (textList) {
             textList.innerHTML = '';
             if (ocrResult.blocks) {
@@ -116,12 +115,12 @@ export const DebugUI = {
                     div.appendChild(spanScore);
                     textList.appendChild(div);
 
-                    // Highlight on hover (optional enhancement)
+                    // ホバー時のハイライト (オプション機能)
                 });
             }
         }
 
-        // Event Listeners
+        // イベントリスナーの設定
         const handleContinue = () => {
             debugSection.classList.add('hidden');
             if (onContinue) onContinue();
@@ -130,16 +129,9 @@ export const DebugUI = {
 
         const handleRetry = () => {
             debugSection.classList.add('hidden');
-            // Simply hide, user is back to camera view or wherever resetView put them.
-            // But ideally we want to go back to Preprocessing? 
-            // For now, let's just close and let user start over or maybe use browser back if we had history.
-            // Since we reset view in error handler, going "Back" usually means cleaning up.
-            // In the ocr.js integration, we called resetView() if error, but here we are in success path.
-            // If user cancels here, we should probably reset view.
-
-            // To properly go "Back" to preprocessing would require keeping state.
-            // For now, treat "Retry" as "Cancel" -> "Reset to Camera".
-            // Cancel logic: Hide debug, prep, processing, show camera
+            // Retryはキャンセルとして扱い、カメラ画面へ戻る。
+            // 状態保持が複雑なため、現時点では前処理画面へは戻らない仕様とする。
+            // キャンセルロジック: デバッグ・前処理・処理中画面を隠し、カメラを表示
             const preview = document.getElementById('selectedImagePreview');
             const video = document.getElementById('cameraPreview');
             const overlay = document.getElementById('cameraOverlay');
@@ -151,7 +143,7 @@ export const DebugUI = {
             if (processingSection) processingSection.classList.add('hidden');
             if (prepSection) prepSection.classList.add('hidden');
 
-            // Show Camera
+            // カメラを表示
             if (cameraContainer) {
                 cameraContainer.classList.remove('hidden');
                 cameraContainer.classList.remove('hidden-camera');
@@ -167,7 +159,7 @@ export const DebugUI = {
             retryBtn.removeEventListener('click', handleRetry);
         };
 
-        // Remove old listeners to be safe (cloning node is a trick, or just one-time listener)
+        // 安全のため古いリスナーを削除 (複製による置換)
         const newContinue = continueBtn.cloneNode(true);
         const newRetry = retryBtn.cloneNode(true);
         continueBtn.parentNode.replaceChild(newContinue, continueBtn);

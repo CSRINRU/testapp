@@ -1,12 +1,12 @@
 import { store } from './store.js';
 import { MAJOR_CATEGORY_DISPLAY_NAMES, MINOR_CATEGORY_DISPLAY_NAMES, CATEGORY_IDS } from './constants.js';
 
-// Chart instances
+// チャートインスタンス
 let categoryChartInstance = null;
 let storeChartInstance = null;
 let trendChartInstance = null;
 
-// Color Palette
+// カラーパレット
 const COLORS = [
     '#6366f1', '#818cf8', '#ef4444', '#10b981', '#f59e0b',
     '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
@@ -23,12 +23,12 @@ export function updateAnalysis() {
         return;
     }
 
-    // --- 1. Filter by Period ---
+    // --- 1. 期間でフィルタリング ---
     const periodEl = document.getElementById('analysisPeriod');
     const period = periodEl ? periodEl.value : 'month';
     let filteredReceipts = filterByPeriod([...receipts], period);
 
-    // --- 2. Filter by Category ---
+    // --- 2. カテゴリでフィルタリング ---
     const categoryEl = document.getElementById('analysisCategory');
     const selectedCategory = categoryEl ? categoryEl.value : 'all';
 
@@ -59,7 +59,7 @@ export function updateAnalysis() {
         return;
     }
 
-    // --- 3. Calculate Logic ---
+    // --- 3. 集計ロジック ---
 
     // 基本統計
     const totalAmount = filteredReceipts.reduce((sum, receipt) => sum + receipt.total, 0);
@@ -73,7 +73,7 @@ export function updateAnalysis() {
         topCategoryLabel = getTopCategory(filteredReceipts, 'major');
     } else {
         // 小カテゴリで集計
-        topCategoryLabel = getTopCategory(filteredReceipts, 'minor', selectedCategory); // selectedCategory is explicit context
+        topCategoryLabel = getTopCategory(filteredReceipts, 'minor', selectedCategory); // selectedCategoryは明示的なコンテキスト
     }
 
     // 統計を表示
@@ -96,12 +96,12 @@ function displayEmptyState() {
         if (el) el.textContent = id === 'topCategory' ? '-' : (id === 'receiptCount' ? '0' : '¥0');
     });
 
-    // Clear Charts
+    // チャートをクリア
     if (categoryChartInstance) { categoryChartInstance.destroy(); categoryChartInstance = null; }
     if (storeChartInstance) { storeChartInstance.destroy(); storeChartInstance = null; }
     if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
 
-    // Clear Products
+    // 商品リストをクリア
     const topProductsEl = document.getElementById('topProducts');
     if (topProductsEl) topProductsEl.innerHTML = '<p class="empty-text">データがありません</p>';
 }
@@ -110,7 +110,7 @@ function displayEmptyState() {
  * 期間フィルタリング
  */
 function filterByPeriod(receipts, period) {
-    if (period === 'custom') return receipts; // Implement custom later if needed or rely on inputs (not fully impl in this snippet)
+    if (period === 'custom') return receipts; // 必要に応じてカスタム実装を追加 (このスニペットでは未実装)
 
     const now = new Date();
     let startDate;
@@ -125,7 +125,7 @@ function filterByPeriod(receipts, period) {
             endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
             break;
         case '3months':
-            startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1); // Exact logic: Start of 2 months ago
+            startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1); // 正確なロジック: 2ヶ月前の初日
             break;
         case 'year':
             startDate = new Date(now.getFullYear(), 0, 1);
@@ -173,7 +173,7 @@ function getTopCategory(receipts, type, contextMajorCategory = null) {
     if (type === 'major') {
         return MAJOR_CATEGORY_DISPLAY_NAMES[topKey] || topKey;
     } else {
-        return MINOR_CATEGORY_DISPLAY_NAMES[topKey] || topKey; // Assuming minor names map exists
+        return MINOR_CATEGORY_DISPLAY_NAMES[topKey] || topKey; // 小カテゴリ名のマップが存在すると仮定
     }
 }
 
@@ -208,7 +208,7 @@ function drawCategoryChart(receipts, selectedCategory) {
     const canvas = document.getElementById('categoryChart');
     if (!canvas) return;
 
-    // Destroy existing
+    // 既存のものを破棄
     if (categoryChartInstance) {
         categoryChartInstance.destroy();
         categoryChartInstance = null;
@@ -224,9 +224,9 @@ function drawCategoryChart(receipts, selectedCategory) {
                 key = item.major_category || 'other';
                 displayKey = MAJOR_CATEGORY_DISPLAY_NAMES[key] || key;
             } else {
-                // Breakdown of the selected category
-                key = item.minor_category || 'unknown'; // Use minor category ID
-                // Map to display name if available, else usage raw ID
+                // 選択されたカテゴリの内訳
+                key = item.minor_category || 'unknown'; // 小カテゴリIDを使用
+                // 表示名が利用可能ならマッピング、なければ生のIDを使用
                 displayKey = MINOR_CATEGORY_DISPLAY_NAMES[key] || key;
             }
             totals[displayKey] = (totals[displayKey] || 0) + (item.amount || 0);
@@ -236,7 +236,7 @@ function drawCategoryChart(receipts, selectedCategory) {
     const labels = Object.keys(totals);
     const data = Object.values(totals);
 
-    if (labels.length === 0) return; // Should allow empty chart or handle it
+    if (labels.length === 0) return; // 空のチャートを許可するか、適切に処理する
 
     categoryChartInstance = new Chart(canvas, {
         type: 'doughnut',
@@ -281,7 +281,7 @@ function drawStoreChart(receipts) {
         storeTotals[storeName] = (storeTotals[storeName] || 0) + r.total;
     });
 
-    // Sort and Top 5
+    // ソートしてトップ5を抽出
     const sorted = Object.entries(storeTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const labels = sorted.map(s => s[0]);
     const data = sorted.map(s => s[1]);
@@ -299,7 +299,7 @@ function drawStoreChart(receipts) {
         },
         options: {
             responsive: true,
-            indexAxis: 'y', // Horizontal Stack like view often better for long store names, or 'x' standard
+            indexAxis: 'y', // 長い店舗名には横型スタック表示が適している場合が多い、または標準の'x'
             plugins: {
                 legend: { display: false },
                 title: { display: false }
@@ -323,19 +323,19 @@ function drawTrendChart(receipts, period) {
         trendChartInstance = null;
     }
 
-    // Daily Aggregation
-    // Create a map of all dates in the range to ensure continuity? 
-    // For simplicity, just aggregate dates present and sort.
+    // 日次集計
+    // 継続性を確保するために範囲内の全ての日付マップを作成する？
+    // 簡略化のため、存在する日付のみ集計してソートする。
 
-    // Better: Sort receipts by date
+    // 改善: レシートを日付順にソート
     const sortedReceipts = [...receipts].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Aggregate by Date
+    // 日付ごとに集計
     const dailyTotals = {};
 
-    // If we want to show 0 for days without receipts, we need to generate the date range.
-    // For now, let's just plot the days we have data for, unless it looks weird.
-    // Actually, "Period Trend" assumes a timeline. It's better to verify the range.
+    // レシートがない日を0として表示するには、日付範囲を生成する必要がある。
+    // 今のところ、奇妙に見えない限りデータがある日のみをプロットする。
+    // 本来、「期間トレンド」はタイムラインを前提とするため、範囲を確認する方が良い。
 
     sortedReceipts.forEach(r => {
         const dateStr = r.date.split('T')[0]; // YYYY-MM-DD
@@ -354,7 +354,7 @@ function drawTrendChart(receipts, period) {
                 data: data,
                 borderColor: '#6366f1',
                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                tension: 0.4, // Smoother curve
+                tension: 0.4, // 滑らかな曲線
                 fill: true
             }]
         },
@@ -398,7 +398,7 @@ export function updateTopProducts(receipts) {
 
     // トップ10を抽出
     const topProducts = Object.entries(productCount)
-        .sort((a, b) => b[1] - a[1]) // Descending by count
+        .sort((a, b) => b[1] - a[1]) // 回数で降順ソート
         .slice(0, 10);
 
     if (topProducts.length === 0) {

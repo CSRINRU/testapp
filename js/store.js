@@ -12,6 +12,7 @@ class Store {
             currentCamera: 'environment', // 'environment' = 背面カメラ
             currentImageData: null, // 現在選択/取得されている画像データ
             isChangingModalImage: false, // モーダル画像の変更中かフラグ
+            currentOcrMethod: 'gemini', // 'local' or 'gemini'
         };
         this._listeners = new Set();
     }
@@ -131,10 +132,19 @@ class Store {
 
     /**
      * 現在のカメラ設定を変更
-     * @param {string} cameraFacingMode 'environment' or 'user'
+     * @param {string} cameraFacingMode 'environment' または 'user'
      */
     setCurrentCamera(cameraFacingMode) {
         this._state.currentCamera = cameraFacingMode;
+        this._notify();
+    }
+
+    /**
+     * OCR解析モードを設定
+     * @param {string} method 'local' or 'gemini'
+     */
+    setOcrMethod(method) {
+        this._state.currentOcrMethod = method;
         this._notify();
     }
 }

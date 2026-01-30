@@ -64,7 +64,6 @@ export function switchTab(tabId) {
     if (tabId === 'camera') {
         // setupCamera(); // 自動起動しないで待機画面を表示
         // カメラコンテナを非表示、開始画面を表示
-        // カメラコンテナを非表示、開始画面を表示
         const container = document.getElementById('camera-container');
         const startScreen = document.getElementById('camera-start-screen');
         if (container) container.classList.add('hidden-camera');
@@ -98,7 +97,41 @@ export function switchTab(tabId) {
 /**
  * イベントリスナーの設定
  */
+/**
+ * OCRメソッド選択の初期化
+ */
+function initOcrMethodSelection() {
+    const methodLocal = document.getElementById('method-local');
+    const methodGemini = document.getElementById('method-gemini');
+    const geminiWarning = document.getElementById('gemini-warning');
+
+    const updateStore = () => {
+        if (methodLocal && methodLocal.checked) {
+            store.setOcrMethod('local');
+            if (geminiWarning) geminiWarning.classList.add('hidden');
+        }
+        if (methodGemini && methodGemini.checked) {
+            store.setOcrMethod('gemini');
+            const hasKey = geminiService.hasApiKey();
+            if (!hasKey && geminiWarning) geminiWarning.classList.remove('hidden');
+            else if (geminiWarning) geminiWarning.classList.add('hidden');
+        }
+    };
+
+    if (methodLocal) methodLocal.addEventListener('change', updateStore);
+    if (methodGemini) methodGemini.addEventListener('change', updateStore);
+
+    // 初期状態の反映 (Storeのデフォルト値)
+    if (store.state.currentOcrMethod === 'gemini' && methodGemini) {
+        methodGemini.checked = true;
+    } else if (methodLocal) {
+        methodLocal.checked = true;
+    }
+    updateStore();
+}
+
 export function setupEventListeners() {
+    initOcrMethodSelection();
     // カメラ撮影ボタン
     const captureBtn = document.getElementById('captureBtn');
     if (captureBtn) captureBtn.addEventListener('click', () => capturePhoto(showReceiptModal));
@@ -113,7 +146,6 @@ export function setupEventListeners() {
         });
     }
 
-    // 画像アップロード
     // 画像アップロード
 
     const fileInput = document.getElementById('fileInput');
@@ -761,11 +793,7 @@ export async function importData(event) {
 
             // 新しいデータを保存
             for (const receipt of data.receipts) {
-                // saveReceiptはコールバック不要のバージョンを使用
-                // しかしUI更新は最後にまとめて行いたい
-                // await saveReceipt(receipt, null, null, null); 
-                // db.js defines saveReceipt(receipt, ...) ignoring callbacks now in my previous update? 
-                // Checks db.js: Yes, I commented out usage of callbacks but kept parameters.
+                // saveReceiptは現在コールバックを無視するように変更されているため、awaitのみ行う
                 await saveReceipt(receipt);
             }
 

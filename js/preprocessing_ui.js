@@ -6,7 +6,8 @@ export const PreprocessingUI = {
     // State
     initialized: false,
     currentImageDataUrl: null,
-    currentParams: { ...defaultOCRParams }, // Use imported default params as base
+    currentParams: { ...defaultOCRParams }, // インポートしたデフォルト値をベースに使用
+    currentOcrMethod: 'local', // 'local' or 'gemini'
     onAnalyze: null,
     onCancel: null,
     debounceTimer: null,
@@ -44,7 +45,10 @@ export const PreprocessingUI = {
             cancelBtn: document.getElementById('prepCancelBtn'),
             analyzeBtn: document.getElementById('prepAnalyzeBtn'),
             tabBtns: document.querySelectorAll('.prep-tab-btn'),
-            tabContents: document.querySelectorAll('.prep-tab-content')
+            tabContents: document.querySelectorAll('.prep-tab-content'),
+            methodLocal: document.getElementById('method-local'),
+            methodGemini: document.getElementById('method-gemini'),
+            geminiWarning: document.getElementById('gemini-warning')
         };
 
         if (!section || !processedCanvas) {
@@ -64,8 +68,8 @@ export const PreprocessingUI = {
             const saved = localStorage.getItem(this.STORAGE_KEY);
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Merge with defaults to ensure all keys exist
-                // check if parsed is valid object
+                // 全てのキーが存在することを確認するためデフォルト値とマージ
+                // パース結果が有効なオブジェクトか確認
                 if (parsed && typeof parsed === 'object') {
                     this.currentParams = { ...defaultOCRParams, ...parsed };
                     console.log('Loaded OCR params:', this.currentParams);
@@ -93,7 +97,7 @@ export const PreprocessingUI = {
                 const val = parseFloat(e.target.value);
                 if (display) display.textContent = val;
                 this.currentParams[paramName] = val;
-                this.saveParams(); // Save on change
+                this.saveParams(); // 変更時に保存
                 if (needsPreview) this.requestPreviewUpdate();
             });
         };
@@ -103,7 +107,7 @@ export const PreprocessingUI = {
             checkbox.addEventListener('change', (e) => {
                 const val = e.target.checked;
                 this.currentParams[paramName] = val;
-                this.saveParams(); // Save on change
+                this.saveParams(); // 変更時に保存
                 if (needsPreview) this.requestPreviewUpdate();
             });
         };
@@ -129,7 +133,7 @@ export const PreprocessingUI = {
         if (this.elements.analyzeBtn) {
             this.elements.analyzeBtn.addEventListener('click', () => {
                 this.hide();
-                // Return current params
+                // 現在のパラメータを返す
                 if (this.onAnalyze) this.onAnalyze({ ...this.currentParams });
             });
         }
@@ -139,16 +143,24 @@ export const PreprocessingUI = {
             btn.addEventListener('click', () => {
                 const targetId = btn.getAttribute('data-target');
 
-                // Deactivate all
+                // 全て非アクティブ化
                 this.elements.tabBtns.forEach(b => b.classList.remove('active'));
                 this.elements.tabContents.forEach(c => c.classList.remove('active'));
 
-                // Activate target
-                btn.classList.add('active');
                 const targetContent = document.getElementById(targetId);
                 if (targetContent) targetContent.classList.add('active');
             });
         });
+
+    },
+
+    checkApiKey() {
+        const hasKey = localStorage.getItem('geminiApiKey'); // 直接geminiServiceにアクセスできないため簡易チェック、またはlocalStorageから
+        if (!hasKey && this.elements.geminiWarning) {
+            this.elements.geminiWarning.classList.remove('hidden');
+        } else if (this.elements.geminiWarning) {
+            this.elements.geminiWarning.classList.add('hidden');
+        }
     },
 
     show(imageDataUrl, onAnalyze, onCancel, initialParams = null) {
@@ -159,17 +171,17 @@ export const PreprocessingUI = {
         this.onCancel = onCancel;
 
         if (initialParams) {
-            // Explicit params override saved ones for this session, but don't overwrite storage unless changed by user
+            // 明示的なパラメータは保存値をオーバーライドするが、ユーザーが変更しない限りストレージは上書きしない
             this.currentParams = { ...initialParams };
         } else {
-            // Reload from storage just in case or keep current
+            // 念のためストレージから再読み込み、または現在値を維持
             this.loadParams();
         }
 
         this.elements.section.classList.remove('hidden');
-        document.querySelector('.camera-container').classList.add('hidden-camera'); // Use consistent class
+        document.querySelector('.camera-container').classList.add('hidden-camera'); // 一貫したクラスを使用
 
-        // Init controls UI from params
+        // パラメータからUIコントロールを初期化
         this.updateControls();
 
         this.requestPreviewUpdate();
@@ -231,7 +243,7 @@ export const PreprocessingUI = {
             const ctx = cvs.getContext('2d');
             ctx.drawImage(imageBitmap, 0, 0);
 
-            // Close bitmap
+            // 画像ビットマップを閉じる
             imageBitmap.close();
 
             this.drawLimitFrame(ctx, cvs.width, cvs.height);
@@ -244,12 +256,12 @@ export const PreprocessingUI = {
         const limit = this.currentParams.limitSideLen;
         const isDownscaling = Math.max(w, h) > limit;
 
-        // Calculate scaling factor to keep text size consistent on screen
+        // 画面上のテキストサイズを一貫させるためのスケーリング係数を計算
         const displayW = this.elements.processedCanvas.clientWidth || w;
         const safeDisplayW = displayW > 0 ? displayW : w;
         const scale = w / safeDisplayW;
 
-        // Target size in CSS pixels
+        // CSSピクセル単位の目標サイズ
         const targetFontSize = 8;
         const fontSize = Math.max(8, Math.round(targetFontSize * scale));
         const padding = Math.round(3 * scale);
@@ -277,7 +289,7 @@ export const PreprocessingUI = {
         ctx.fillStyle = '#00ff00';
         ctx.fillText(text, bgX + padding, bgY + (bgH - fontSize) / 2);
 
-        // Line Width scaling
+        // 線幅のスケーリング
         const baseLineWidth = isDownscaling ? 2 : 1;
         ctx.lineWidth = Math.max(1, Math.round(baseLineWidth * scale));
 

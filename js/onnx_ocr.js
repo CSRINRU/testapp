@@ -117,7 +117,7 @@ class OnnxOCR {
             // (向きの確認が必要な場合あり)
             // 切り出し準備
 
-            // ボックス部分の画像を切り出し (Rotated Crop)
+            // ボックス部分の画像を切り出し (回転を考慮)
             const cropCanvas = this.cropRotatedImage(image, box);
 
             // 認識実行
@@ -151,9 +151,9 @@ class OnnxOCR {
                 results.push({
                     text,
                     score,
-                    box: outBox, // 4 points
-                    paddedBox: outPaddedBox, // Padded area
-                    // Metadata for sorting
+                    box: outBox, // 4点
+                    paddedBox: outPaddedBox, // パディング領域
+                    // ソート用メタデータ
                     centerY,
                     centerX,
                     height
@@ -430,9 +430,9 @@ class OnnxOCR {
         return lines;
     }
 
-    // --- Detection Logic ---
+    // --- 検出ロジック ---
 
-    async detectText(image) { // image is OffscreenCanvas
+    async detectText(image) { // image は OffscreenCanvas
         // 画像の前処理 (Resize & Normalize)
         const { tensor, ratioH, ratioW, newH, newW } = await this.preprocessDet(image);
 
@@ -443,7 +443,7 @@ class OnnxOCR {
 
         // 後処理 (Contour based)
         const mapData = output.data;
-        // Output shape is [1, 1, newH, newW]
+        // 出力形状は [1, 1, newH, newW]
         const boxes = this.postprocessDetContours(mapData, newW, newH, ratioW, ratioH);
 
         return boxes;
@@ -656,15 +656,15 @@ class OnnxOCR {
 
         // 頂点順序の整合性確認
         // (簡易ソートや回転方向チェックなどが必要な場合があるが、ここではPCA順序を使用) 
-        // Standard order: Sort by Y first then X?
-        // Let's implement a simple sort to be safe: Find top-left-ish.
-        // But the PCA loop above (minX...maxY) actually traces the rectangle counter-clockwise or clockwise.
-        // Let's just return the 4 points.
+        // 標準順序: Y優先、次にXでソート?
+        // 安全のため単純なソートを実装: 左上を探す。
+        // しかし上記のPCAループ(minX...maxY)は実際には矩形を反時計回りまたは時計回りにトレースしている。
+        // 単に4点を返すことにする。
         return result;
     }
 
 
-    // --- Recognition Logic ---
+    // --- 認識ロジック ---
 
     async recognizeText(cropCanvas) {
         // 前処理
@@ -697,7 +697,7 @@ class OnnxOCR {
 
         // Tensor作成
         const floatData = new Float32Array(3 * imgH * imgW);
-        // Normalize: (x/255 - 0.5) / 0.5
+        // 正規化: (x/255 - 0.5) / 0.5
         for (let i = 0; i < imgH * imgW; i++) {
             // R
             floatData[i] = ((data[i * 4] / 255.0) - 0.5) / 0.5;
@@ -711,7 +711,7 @@ class OnnxOCR {
     }
 
     decodeRec(data, dims) {
-        // shape: [1, seq_len, num_classes]
+        // 形状: [1, seq_len, num_classes]
         const seqLen = dims[1];
         const vocabSize = dims[2];
 
@@ -758,7 +758,7 @@ class OnnxOCR {
         };
     }
 
-    // --- Helpers ---
+    // --- ヘルパー ---
 
     async loadImage(src) {
         if (typeof ImageBitmap !== 'undefined' && src instanceof ImageBitmap) {

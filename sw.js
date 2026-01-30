@@ -59,23 +59,23 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request)
             .then((response) => {
-                // Cache hit - return response
+                // キャッシュヒット - レスポンスを返す
                 if (response) {
                     return response;
                 }
                 return fetch(event.request)
                     .then((response) => {
-                        // Check if we received a valid response
+                        // 有効なレスポンスか確認
                         if (!response || response.status !== 200 || response.type !== 'basic') {
                             return response;
                         }
 
-                        // Clone the response
+                        // レスポンスを複製
                         const responseToCache = response.clone();
 
                         caches.open(CACHE_NAME)
                             .then((cache) => {
-                                // Don't cache if not http/https (e.g. chrome-extension scheme)
+                                // http/https以外はキャッシュしない (例: chrome-extensionなど)
                                 if (event.request.url.startsWith('http')) {
                                     cache.put(event.request, responseToCache);
                                 }
