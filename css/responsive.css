@@ -1,66 +1,48 @@
-/* レスポンシブ対応 */
-@media (min-width: 768px) {
-    .container {
-        max-width: 768px;
-        margin: 0 auto;
-    }
+/* レスポンシブ対応 - スマホ専用スタイルをデフォルト化 */
 
-    .stats-cards {
-        grid-template-columns: repeat(4, 1fr);
-    }
+/* PC専用スタイル削除 (min-width: 768px) */
 
-    .camera-view {
-        height: 400px;
-    }
-
-    .nav-tab {
-        font-size: 1rem;
-        padding: 1rem;
-    }
+/* モバイルスタイルをグローバルに適用 (元 max-width: 480px) */
+.header h1 {
+    font-size: 1.2rem;
 }
 
-@media (max-width: 480px) {
-    .header h1 {
-        font-size: 1.2rem;
-    }
+.btn {
+    padding: 0.75rem 1.2rem;
+    font-size: 0.95rem;
+    /* 小さすぎたので調整 */
+}
 
-    .btn {
-        padding: 0.75rem 1.2rem;
-        font-size: 0.95rem;
-        /* 小さすぎたので調整 */
-    }
+.btn-large {
+    padding: 1rem 1.8rem;
+    font-size: 1.1rem;
+}
 
-    .btn-large {
-        padding: 1rem 1.8rem;
-        font-size: 1.1rem;
-    }
+.btn-small {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+}
 
-    .btn-small {
-        padding: 0.6rem 1rem;
-        font-size: 0.85rem;
-    }
+.filter-controls {
+    flex-direction: column;
+}
 
-    .filter-controls {
-        flex-direction: column;
-    }
+.form-row {
+    flex-direction: column;
+}
 
-    .form-row {
-        flex-direction: column;
-    }
+/* モーダルボタンのスマホ調整（保存・削除・キャンセルなど） */
+.modal-footer {
+    flex-direction: column-reverse;
+    /* 上から保存、削除、キャンセルの順 */
+    gap: 10px;
+    padding: 1.2rem 1.5rem;
+}
 
-    /* モーダルボタンのスマホ調整（保存・削除・キャンセルなど） */
-    .modal-footer {
-        flex-direction: column-reverse;
-        /* 上から保存、削除、キャンセルの順 */
-        gap: 10px;
-        padding: 1.2rem 1.5rem;
-    }
-
-    .modal-footer .btn {
-        width: 100%;
-        padding: 0.9rem;
-        font-size: 1.1rem;
-        /* 表示を大きく */
-        margin: 0 !important;
-    }
+.modal-footer .btn {
+    width: 100%;
+    padding: 0.9rem;
+    font-size: 1.1rem;
+    /* 表示を大きく */
+    margin: 0 !important;
 }

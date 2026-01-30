@@ -111,35 +111,54 @@
     margin-bottom: 1rem;
 }
 
-/* アイテム編集行のスタイル */
+/* ========================================
+   商品リスト編集セクション - モダンデザイン
+   ======================================== */
+
 .items-container {
     max-height: 55vh;
-    /* Increased from 400px to dynamic viewport height */
     overflow-y: auto;
-    border: 1px solid var(--border-color);
-    padding: 0;
-    /* Remove padding for edge-to-edge feel */
+    border: 1px solid #e9ecef;
+    padding: 2px;
     border-radius: var(--radius-md);
-    margin-bottom: 10px;
-    background: var(--surface-color);
+    margin-bottom: 6px;
+    background: #6f70d83b;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* カスタムスクロールバー */
+.items-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.items-container::-webkit-scrollbar-track {
+    background: #f1f3f5;
+    border-radius: 4px;
+}
+
+.items-container::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.items-container::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
 }
 
 .items-header-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 40px;
-    gap: 4px;
-    /* Reduced from 10px */
-    padding: 6px 4px;
-    /* Reduced from 8px 10px */
-    font-weight: bold;
-    font-size: 0.8rem;
-    /* Slightly smaller */
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border-color);
-    /* Thinner border */
-    margin-bottom: 4px;
-    /* Reduced from 8px */
-    background-color: var(--surface-color);
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 32px;
+    gap: 2px;
+    padding: 2px 3px;
+    font-weight: 600;
+    font-size: 0.55rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.1px;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 2px;
+    background: #f8f9fa;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -147,200 +166,354 @@
 
 .item-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 40px;
-    gap: 4px;
-    /* Reduced from 10px */
-    margin-bottom: 4px;
-    /* Reduced from 8px */
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 32px;
+    gap: 2px;
+    margin-bottom: 2px;
     align-items: center;
-    background: var(--surface-color);
-    padding: 4px 2px;
-    /* Reduced from 8px 5px */
-    border-radius: var(--radius-sm);
-    transition: background-color 0.2s;
+    background: white;
+    padding: 1px 3px;
+    border-radius: 2px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid #e9ecef;
 }
 
 .item-row:hover {
-    background-color: var(--background-color);
+    background: #f8f9ff;
+    border-color: var(--primary-color);
+    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.08);
 }
 
 .item-row input,
 .item-row select {
-    padding: 6px;
-    /* Reduced from 8px */
-    font-size: 0.85rem;
-    /* Slightly smaller */
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    padding: 2px 3px;
+    font-size: 0.6rem;
+    border: 1px solid #dee2e6;
+    border-radius: 2px;
     width: 100%;
-    transition: border-color 0.2s;
-    height: 36px;
-    /* Fixed height for consistency */
+    transition: all 0.2s ease;
+    background: white;
+    height: 22px;
+    line-height: 1.2;
 }
 
 .item-row input:focus,
 .item-row select:focus {
     border-color: var(--primary-color);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.1);
+    background: #fefeff;
 }
 
 .item-row .btn-danger {
     padding: 0;
-    width: 32px;
-    /* Smaller button */
-    height: 32px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
     margin: 0 auto;
-    background-color: #fee2e2;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
     color: #ef4444;
-    transition: all 0.2s;
-    box-shadow: none;
-    /* Remove shadow for flat look in dense list */
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(239, 68, 68, 0.2);
+    border: 1px solid #fecaca;
+    font-size: 0.65rem;
 }
 
 .item-row .btn-danger:hover {
-    background-color: #ef5350;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
-    transform: scale(1.1);
+    transform: scale(1.1) rotate(90deg);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
 }
 
-/* スマホ最適化 */
-@media (max-width: 480px) {
-    .items-header-row {
-        display: none;
-        /* スマホではヘッダー隠す */
-    }
+/* ========================================
+   レシート詳細モーダル - モダンUIデザイン
+   ======================================== */
 
-    .item-row {
-        grid-template-columns: 1fr 1fr 40px;
-        grid-template-rows: auto auto auto;
-        grid-template-areas:
-            "name name name"
-            "major minor minor"
-            "amount amount delete";
-        gap: 4px;
-        background: #58585809;
-        padding: 8px;
-        border: 1px solid #00000010;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-        margin-bottom: 7px;
-    }
-
-    .item-name {
-        grid-area: name;
-        font-weight: bold;
-        padding: 6px !important;
-    }
-
-    .item-major-category {
-        grid-area: major;
-    }
-
-    .item-minor-category {
-        grid-area: minor;
-    }
-
-    .item-amount {
-        grid-area: amount;
-        font-size: 1.1rem !important;
-        font-weight: 500;
-        text-align: right;
-    }
-
-    .delete-item-btn {
-        grid-area: delete;
-        width: 40px !important;
-        height: 40px !important;
-        margin-top: 0;
-    }
-
-    /* プレースホルダーが見やすいように調整 */
-    .item-row input,
-    .item-row select {
-        background-color: #fdfdfd;
-        height: auto;
-        /* タッチしやすい高さ */
-    }
-}
-
-/* Receipt Details Modal Customizations */
+/* 基本情報フィールド（日付・店舗名） - 控えめなデザイン */
 .form-group-horizontal {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-bottom: 5px;
+    gap: 8px;
+    background: #f8f9fa;
+    padding: 3px 8px;
+    margin-bottom: 3px;
+    transition: background-color 0.2s ease;
+}
+
+.form-group-horizontal:hover {
+    background: #e9ecef;
 }
 
 .form-group-horizontal label {
-    width: 70px;
-    margin-bottom: 0;
-    text-align: right;
     flex-shrink: 0;
-    color: #999;
-    font-size: 0.85rem;
+    width: 45px;
+    margin: 0;
+    color: #868e96;
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-align: right;
 }
 
 .form-group-horizontal input {
     flex: 1;
-    color: #555;
-    font-size: 0.9rem;
-    padding: 4px;
-    border: 1px solid #eee;
+    color: #495057;
+    font-size: 0.75rem;
+    font-weight: 400;
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
 }
 
+.form-group-horizontal input:focus {
+    outline: none;
+}
+
+/* 合計金額カード - コンパクト化 */
 .total-amount-group {
-    width: 85%;
-    margin: 0 auto;
-    background-color: #fff0f0;
-    padding: 4px;
+    width: 100%;
+    margin: 6px 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 8px 12px;
     border-radius: var(--radius-md);
-    text-align: left;
-    margin-bottom: 10px;
-    border: 1px solid #ffdcdc;
-    margin-top: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 
 .total-amount-group label {
-    margin-left: 12px;
-    font-size: 0.85rem;
-    color: #999;
-    margin-bottom: 0px;
     display: block;
+    margin: 0 0 2px 0;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .total-input-wrapper {
+    position: relative;
     display: flex;
     align-items: baseline;
     justify-content: center;
-    gap: 5px;
+    gap: 6px;
 }
 
 .form-group.total-amount-group input {
-    font-size: 2.2rem;
+    font-size: 2rem;
     font-weight: 800;
-    color: #d32f2f;
+    color: #ffffff;
     text-align: center;
     border: none;
     background: transparent;
     width: auto;
-    padding: 0;
+    padding: 4px 2px;
     max-width: 200px;
     box-shadow: none;
-}
-
-.currency-unit {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #d32f2f;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .form-group.total-amount-group input:focus {
     outline: none;
     border: none;
     box-shadow: none;
+}
+
+.form-group.total-amount-group input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.currency-unit {
+    font-size: 1rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 商品リストセクションのヘッダー */
+.form-group label:not(.total-amount-group label):not(.form-group-horizontal label) {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* メモ欄のスタイリング */
+.form-group textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+    background: white;
+}
+
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+/* 商品追加ボタンのスタイリング */
+#addItemBtn {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    background: white;
+    color: var(--primary-color);
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+#addItemBtn:hover {
+    background: #f8f9fa;
+    border-color: var(--primary-color);
+}
+
+
+/* スマホ最適化 - グローバル適用 */
+.items-header-row {
+    display: none;
+}
+
+.item-row {
+    grid-template-columns: 1.5fr 1fr 30px;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "name amount delete"
+        "major minor delete";
+    gap: 6px 6px;
+    background: white;
+    padding: 6px 8px;
+    border: 1px solid #e9ecef;
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.item-name {
+    grid-area: name;
+    font-weight: 600;
+    padding: 4px 6px !important;
+    background: #fff;
+    border: 1px solid #dee2e6 !important;
+    font-size: 0.8rem !important;
+    height: 32px !important;
+}
+
+.item-major-category {
+    grid-area: major;
+    height: 28px !important;
+    font-size: 0.7rem !important;
+    padding: 0 4px !important;
+}
+
+.item-minor-category {
+    grid-area: minor;
+    height: 28px !important;
+    font-size: 0.7rem !important;
+    padding: 0 4px !important;
+}
+
+.item-amount {
+    grid-area: amount;
+    font-size: 0.95rem !important;
+    font-weight: 700;
+    text-align: right;
+    color: var(--primary-color);
+    padding: 4px 6px !important;
+    height: 32px !important;
+}
+
+.delete-item-btn {
+    grid-area: delete;
+    width: 30px !important;
+    height: 100% !important;
+    max-height: 64px;
+    margin-top: 0;
+    border-radius: 4px !important;
+    font-size: 0.9rem !important;
+}
+
+.item-row input,
+.item-row select {
+    background-color: #fff;
+}
+
+/* 合計金額表示をコンパクトに */
+.form-group.total-amount-group {
+    padding: 6px 8px;
+    margin: 4px 0;
+}
+
+.form-group.total-amount-group input {
+    font-size: 1.6rem;
+    max-width: 140px;
+    padding: 0;
+}
+
+.currency-unit {
+    font-size: 0.9rem;
+}
+
+.modal-footer .btn {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+}
+
+/* items-containerの高さを確保（キーボード表示時の対策は別途必要だが、基本は見やすく） */
+.items-container {
+    max-height: 50vh;
+}
+
+/* ========================================
+   商品合計サマリー - 控えめなデザイン
+   ======================================== */
+
+.items-summary-text {
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #6c757d;
+}
+
+.items-summary-text strong {
+    color: #495057;
+    font-weight: 600;
+}
+
+.items-summary-text .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+}
+
+.items-summary-text .summary-row:last-child {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #495057;
+    margin-top: 2px;
+    padding-top: 5px;
+    border-top: 1px solid #dee2e6;
+}
+
+.items-summary-text .summary-label {
+    color: #6c757d;
+}
+
+.items-summary-text .summary-value {
+    font-weight: 600;
+    color: #495057;
 }

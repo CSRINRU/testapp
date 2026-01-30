@@ -169,10 +169,8 @@
     display: none !important;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .debug-ui-sidebar {
-        display: none;
-        /* Hide sidebar on mobile */
-    }
+/* Responsive - Global Mobile Style */
+.debug-ui-sidebar {
+    display: none;
+    /* Hide sidebar on mobile */
 }

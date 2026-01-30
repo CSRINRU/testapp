@@ -268,9 +268,7 @@ input[type="range"] {
     border-top: 1px solid #eee;
 }
 
-/* Mobile adjustments */
-@media (max-width: 480px) {
-    .preprocessing-controls-grid {
-        grid-template-columns: 1fr;
-    }
+/* Mobile adjustments - Global */
+.preprocessing-controls-grid {
+    grid-template-columns: 1fr;
 }
