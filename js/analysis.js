@@ -8,9 +8,9 @@ let trendChartInstance = null;
 
 // Color Palette
 const COLORS = [
-    '#4e54c8', '#8f94fb', '#ff6b6b', '#4ecdc4', '#ffd166',
-    '#06d6a0', '#118ab2', '#ef476f', '#1d3557', '#fb8500',
-    '#219ebc', '#ffb703', '#8ecae6', '#e63946', '#f1faee'
+    '#6366f1', '#818cf8', '#ef4444', '#10b981', '#f59e0b',
+    '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316',
+    '#64748b', '#06b6d4', '#d946ef', '#22c55e', '#eab308'
 ];
 
 /**
@@ -293,8 +293,8 @@ function drawStoreChart(receipts) {
             datasets: [{
                 label: '支出額',
                 data: data,
-                backgroundColor: '#4e54c8',
-                borderRadius: 4
+                backgroundColor: '#6366f1',
+                borderRadius: 8
             }]
         },
         options: {
@@ -352,9 +352,9 @@ function drawTrendChart(receipts, period) {
             datasets: [{
                 label: '日次支出',
                 data: data,
-                borderColor: '#ef476f',
-                backgroundColor: 'rgba(239, 71, 111, 0.1)',
-                tension: 0.3, // Curve
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                tension: 0.4, // Smoother curve
                 fill: true
             }]
         },
