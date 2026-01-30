@@ -1,6 +1,7 @@
 
 import { getPreprocessedPreview } from './ocr.js';
 import { defaultOCRParams } from './constants.js';
+import { CroppingUI } from './cropping_ui.js';
 
 export const PreprocessingUI = {
     // State
@@ -10,7 +11,10 @@ export const PreprocessingUI = {
     currentOcrMethod: 'local', // 'local' or 'gemini'
     onAnalyze: null,
     onCancel: null,
+    onAnalyze: null,
+    onCancel: null,
     debounceTimer: null,
+    croppingUI: null,
 
     // UI Elements
     elements: {},
@@ -58,6 +62,17 @@ export const PreprocessingUI = {
 
         // Load saved params or use defaults
         this.loadParams();
+
+        // Initialize CroppingUI
+        this.croppingUI = new CroppingUI(this.elements.processedCanvas, 1.0, () => {
+            // Redraw base image
+            if (this.currentPreviewBitmap && this.elements.processedCanvas) {
+                const ctx = this.elements.processedCanvas.getContext('2d');
+                ctx.globalCompositeOperation = 'copy'; // Replace content
+                ctx.drawImage(this.currentPreviewBitmap, 0, 0);
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        });
 
         this.bindEvents();
         this.initialized = true;
@@ -133,8 +148,15 @@ export const PreprocessingUI = {
         if (this.elements.analyzeBtn) {
             this.elements.analyzeBtn.addEventListener('click', () => {
                 this.hide();
-                // 現在のパラメータを返す
-                if (this.onAnalyze) this.onAnalyze({ ...this.currentParams });
+                // Get cropped image
+                let croppedDataUrl = null;
+                if (this.croppingUI && this.elements.processedCanvas) {
+                    const croppedCanvas = this.croppingUI.getCroppedCanvas(this.elements.processedCanvas);
+                    croppedDataUrl = croppedCanvas.toDataURL('image/jpeg');
+                }
+
+                // 現在のパラメータと切り抜き画像を返す
+                if (this.onAnalyze) this.onAnalyze({ ...this.currentParams, croppedImage: croppedDataUrl });
             });
         }
 
@@ -165,6 +187,16 @@ export const PreprocessingUI = {
 
     show(imageDataUrl, onAnalyze, onCancel, initialParams = null) {
         if (!this.initialized) this.init();
+
+        // Reset cropping UI for new image
+        if (this.croppingUI) {
+            // We can't set size here because we don't know the processed size yet.
+            // But we can reset internal state if needed.
+            // Actually `setImageSize` in `updatePreview` will handle reset if dimensions differ.
+            // But if dimensions are same as previous image, it won't reset. 
+            // Ideally we force reset for a new `show` call.
+            this.croppingUI.imageWidth = 0; // Force reset in updatePreview
+        }
 
         this.currentImageDataUrl = imageDataUrl;
         this.onAnalyze = onAnalyze;
@@ -244,9 +276,27 @@ export const PreprocessingUI = {
             ctx.drawImage(imageBitmap, 0, 0);
 
             // 画像ビットマップを閉じる
-            imageBitmap.close();
+            // imageBitmap.close(); // Keep it open for redraws
 
-            this.drawLimitFrame(ctx, cvs.width, cvs.height);
+            // Close previous bitmap if exists
+            if (this.currentPreviewBitmap) {
+                this.currentPreviewBitmap.close();
+            }
+            this.currentPreviewBitmap = imageBitmap;
+
+            // Set image size for cropping UI and reset/draw
+            if (this.croppingUI) {
+                // If the image size changed significantly, or if it's a new image, we might want to reset?
+                // For now, simpler to just set size. 
+                // However, we only want to reset crop on NEW image load, not on every param change (like contrast).
+                // check if dimensions changed
+                if (this.croppingUI.imageWidth !== cvs.width || this.croppingUI.imageHeight !== cvs.height) {
+                    this.croppingUI.setImageSize(cvs.width, cvs.height);
+                }
+                this.croppingUI.draw();
+            }
+
+            // this.drawLimitFrame(ctx, cvs.width, cvs.height); // Disable old frame
         } catch (e) {
             console.error('Preview Error:', e);
         }

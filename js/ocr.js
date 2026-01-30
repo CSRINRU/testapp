@@ -199,7 +199,9 @@ export async function processImage(imageData, showReceiptModal) {
             // Local OCRモード (既存フロー)
             try {
                 // OCR処理
-                const ocrResult = await processOCR(imageData, currentParams);
+                // Use cropped image if available
+                const targetImage = finalParams && finalParams.croppedImage ? finalParams.croppedImage : imageData;
+                const ocrResult = await processOCR(targetImage, currentParams);
 
                 console.group('OCR認識結果詳細');
                 console.log('全体テキスト:', ocrResult.text);
@@ -225,9 +227,9 @@ export async function processImage(imageData, showReceiptModal) {
                 console.groupEnd();
 
                 // Debug UIを表示
-                DebugUI.show(imageData, ocrResult, async () => {
+                DebugUI.show(targetImage, ocrResult, async () => {
                     // 処理継続
-                    await processGemini(ocrResult.text, imageData, progressText, showReceiptModal, processingSection);
+                    await processGemini(ocrResult.text, targetImage, progressText, showReceiptModal, processingSection);
                 });
 
             } catch (error) {

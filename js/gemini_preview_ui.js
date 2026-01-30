@@ -1,3 +1,5 @@
+import { CroppingUI } from './cropping_ui.js';
+
 export const GeminiPreviewUI = {
     // State
     initialized: false,
@@ -10,6 +12,7 @@ export const GeminiPreviewUI = {
 
     // UI Elements
     elements: {},
+    croppingUI: null,
 
     init() {
         if (this.initialized) return;
@@ -32,6 +35,23 @@ export const GeminiPreviewUI = {
         }
 
         this.bindEvents();
+        this.bindEvents();
+
+        // Initialize CroppingUI
+        this.croppingUI = new CroppingUI(this.elements.canvas, 1.0, () => {
+            // Redraw callback
+            if (this.currentPreviewImage && this.elements.canvas) {
+                const ctx = this.elements.canvas.getContext('2d');
+                // Ensure we clear/overwrite
+                ctx.globalCompositeOperation = 'copy';
+                const limit = this.currentParams.limitSideLen;
+                if (this.currentDrawSize) {
+                    ctx.drawImage(this.currentPreviewImage, 0, 0, this.currentDrawSize.width, this.currentDrawSize.height);
+                }
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        });
+
         this.initialized = true;
     },
 
@@ -72,6 +92,10 @@ export const GeminiPreviewUI = {
 
         this.elements.section.classList.remove('hidden');
 
+        if (this.croppingUI) {
+            this.croppingUI.imageWidth = 0; // Force reset
+        }
+
         // Hide camera container if visible
         const container = document.getElementById('camera-container');
         if (container) {
@@ -100,6 +124,8 @@ export const GeminiPreviewUI = {
         img.onload = () => {
             const limit = this.currentParams.limitSideLen;
             const { width, height } = this.calculateSize(img.width, img.height, limit);
+            this.currentDrawSize = { width, height };
+            this.currentPreviewImage = img; // Store for redraw
 
             const cvs = this.elements.canvas;
             cvs.width = width;
@@ -108,7 +134,14 @@ export const GeminiPreviewUI = {
             ctx.drawImage(img, 0, 0, width, height);
 
             // Draw resolution info
-            this.drawInfo(ctx, width, height);
+            // this.drawInfo(ctx, width, height); // Disable old info
+
+            if (this.croppingUI) {
+                if (this.croppingUI.imageWidth !== width || this.croppingUI.imageHeight !== height) {
+                    this.croppingUI.setImageSize(width, height);
+                }
+                this.croppingUI.draw();
+            }
         };
         img.src = this.currentImageDataUrl;
     },
@@ -170,7 +203,13 @@ export const GeminiPreviewUI = {
         if (!this.elements.canvas) return;
 
         // Get resized image from canvas
-        const resizedDataUrl = this.elements.canvas.toDataURL('image/jpeg', 0.9);
+        let resizedDataUrl;
+        if (this.croppingUI) {
+            const croppedCanvas = this.croppingUI.getCroppedCanvas(this.elements.canvas);
+            resizedDataUrl = croppedCanvas.toDataURL('image/jpeg', 0.9);
+        } else {
+            resizedDataUrl = this.elements.canvas.toDataURL('image/jpeg', 0.9);
+        }
 
         this.hide();
         if (this.onSend) {
