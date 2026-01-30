@@ -257,12 +257,19 @@ function resetView() {
     if (prepSection) prepSection.classList.add('hidden');
     if (geminiSection) geminiSection.classList.add('hidden'); // 追加
     if (preview) preview.classList.add('hidden');
-    if (video) video.classList.remove('hidden');
-    if (overlay) overlay.classList.remove('hidden');
+    // if (video) video.classList.remove('hidden'); // default hidden
+    // if (overlay) overlay.classList.remove('hidden'); // default hidden
+
+    // カメラコンテナを隠し、スタート画面を表示する
     if (container) {
-        container.classList.remove('hidden');
-        container.classList.remove('hidden-camera');
+        container.classList.add('hidden');
+        container.classList.add('hidden-camera');
     }
+    const startScreen = document.getElementById('camera-start-screen');
+    if (startScreen) startScreen.classList.remove('hidden');
+
+    // イベント発火: UI側でカメラ停止などを行う
+    window.dispatchEvent(new CustomEvent('ocr-reset'));
 }
 
 async function processGemini(text, imageData, progressText, showReceiptModal, processingSection) {

@@ -298,6 +298,12 @@ export function setupEventListeners() {
     if (fileInputStart) {
         fileInputStart.addEventListener('change', (e) => handleImageUpload(e, showReceiptModal));
     }
+
+    // OCRリセットイベント (カメラ停止)
+    window.addEventListener('ocr-reset', () => {
+        stopCamera();
+        // 必要に応じて他のUIリセット処理
+    });
 }
 
 /**
